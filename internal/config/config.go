@@ -2,16 +2,17 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2023-06-04 19:38:41
+ * @LastEditTime: 2023-06-05 07:57:28
  * @Description: 系统配置相关操作
  */
 package config
 
 import (
-    "core/internal/pem"
-    "core/pkg/encrypt"
-    "core/pkg/errorx"
     "encoding/json"
+
+    "github.com/fbs-io/core/internal/pem"
+    "github.com/fbs-io/core/pkg/encrypt"
+    "github.com/fbs-io/core/pkg/errorx"
 )
 
 type Config struct {

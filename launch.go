@@ -2,18 +2,19 @@
  * @Author: reel
  * @Date: 2023-05-11 23:32:22
  * @LastEditors: reel
- * @LastEditTime: 2023-06-04 13:43:00
+ * @LastEditTime: 2023-06-05 07:56:02
  * @Description: 管理接口
  */
 package core
 
 import (
-    "core/internal/pem"
-    "core/logx"
-    "core/service"
     "fmt"
     "os"
     "os/signal"
+
+    "github.com/fbs-io/core/internal/pem"
+    "github.com/fbs-io/core/logx"
+    "github.com/fbs-io/core/service"
 )
 
 // 关闭整个服务

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-04 22:37:35
  * @LastEditors: reel
- * @LastEditTime: 2023-06-04 22:37:37
+ * @LastEditTime: 2023-06-05 07:50:12
  * @Description: 请填写简介
  */
 package logx
@@ -12,9 +12,9 @@ import (
     "path"
     "time"
 
-    "core/pkg/env"
-    "core/pkg/errorx"
-    "core/pkg/filex"
+    "github.com/fbs-io/core/pkg/env"
+    "github.com/fbs-io/core/pkg/errorx"
+    "github.com/fbs-io/core/pkg/filex"
 
     rotatelogs "github.com/lestrrat-go/file-rotatelogs"
     "github.com/rifflock/lfshook"

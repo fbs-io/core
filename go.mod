@@ -1,4 +1,4 @@
-module core
+module github.com/fbs-io/core
 
 go 1.20
 

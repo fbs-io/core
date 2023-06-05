@@ -2,25 +2,24 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2023-06-04 19:33:37
+ * @LastEditTime: 2023-06-06 06:14:11
  * @Description: 系统配置相关操作
  */
 package core
 
 import (
-    "core/internal/pem"
-    "core/logx"
-    "core/service"
-    "core/store/dsn"
     "encoding/json"
     "fmt"
 
-    // "ddns/core/store/rdb"
-
-    "core/pkg/encrypt"
-    "core/pkg/errno"
-    "core/pkg/errorx"
     "path"
+
+    "github.com/fbs-io/core/internal/pem"
+    "github.com/fbs-io/core/logx"
+    "github.com/fbs-io/core/pkg/encrypt"
+    "github.com/fbs-io/core/pkg/errno"
+    "github.com/fbs-io/core/pkg/errorx"
+    "github.com/fbs-io/core/service"
+    "github.com/fbs-io/core/store/dsn"
 
     "github.com/gin-gonic/gin"
 )

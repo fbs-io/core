@@ -2,18 +2,19 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-06-04 13:58:16
+ * @LastEditTime: 2023-06-05 07:47:12
  * @Description: 关系数据库配置
  */
 package rdb
 
 import (
-    "core/pkg/env"
-    "core/pkg/errorx"
-    "core/store/dsn"
     "os"
     "strings"
     "time"
+
+    "github.com/fbs-io/core/pkg/env"
+    "github.com/fbs-io/core/pkg/errorx"
+    "github.com/fbs-io/core/store/dsn"
 
     "gorm.io/driver/mysql"
     "gorm.io/driver/postgres"

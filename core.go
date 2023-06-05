@@ -2,23 +2,24 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2023-06-04 22:27:45
+ * @LastEditTime: 2023-06-06 06:03:24
  * @Description: 管理核心组件的启动和运行
  */
 package core
 
 import (
-    "core/cron"
-    "core/internal/config"
-    "core/internal/msc"
-    "core/internal/pem"
-    "core/pkg/env"
-    "core/pkg/errorx"
-    "core/pkg/mux"
-    "core/service"
-    "core/store/cache"
-    "core/store/rdb"
     "fmt"
+
+    "github.com/fbs-io/core/cron"
+    "github.com/fbs-io/core/internal/config"
+    "github.com/fbs-io/core/internal/msc"
+    "github.com/fbs-io/core/internal/pem"
+    "github.com/fbs-io/core/pkg/env"
+    "github.com/fbs-io/core/pkg/errorx"
+    "github.com/fbs-io/core/pkg/mux"
+    "github.com/fbs-io/core/service"
+    "github.com/fbs-io/core/store/cache"
+    "github.com/fbs-io/core/store/rdb"
 
     "github.com/gin-gonic/gin"
 )

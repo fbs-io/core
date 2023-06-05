@@ -2,12 +2,12 @@
  * @Author: reel
  * @Date: 2023-05-11 22:19:24
  * @LastEditors: reel
- * @LastEditTime: 2023-05-18 22:56:56
+ * @LastEditTime: 2023-06-06 06:15:20
  * @Description: API 常用状态码
  */
 package errno
 
-import "core/pkg/errorx"
+import "github.com/fbs-io/core/pkg/errorx"
 
 var _ Errno = (*code)(nil)
 

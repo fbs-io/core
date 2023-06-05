@@ -2,16 +2,17 @@
  * @Author: reel
  * @Date: 2023-05-17 22:49:53
  * @LastEditors: reel
- * @LastEditTime: 2023-06-04 18:52:45
+ * @LastEditTime: 2023-06-05 07:57:49
  * @Description: 后台管理中心
  */
 package msc
 
 import (
-    "core/internal/config"
-    "core/internal/msc/views"
-    "core/store/cache"
     "net/http"
+
+    "github.com/fbs-io/core/internal/config"
+    "github.com/fbs-io/core/internal/msc/views"
+    "github.com/fbs-io/core/store/cache"
 
     "github.com/gin-gonic/gin"
 )
