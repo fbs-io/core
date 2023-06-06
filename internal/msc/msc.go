@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-17 22:49:53
  * @LastEditors: reel
- * @LastEditTime: 2023-06-05 07:57:49
+ * @LastEditTime: 2023-06-06 23:23:03
  * @Description: 后台管理中心
  */
 package msc
@@ -12,26 +12,29 @@ import (
 
     "github.com/fbs-io/core/internal/config"
     "github.com/fbs-io/core/internal/msc/views"
+    "github.com/fbs-io/core/session"
     "github.com/fbs-io/core/store/cache"
 
     "github.com/gin-gonic/gin"
 )
 
 type handler struct {
-    config *config.Config
-    cache  cache.Store
+    config  *config.Config
+    cache   cache.Store
+    session session.Session
 }
 
 func Init(engine *gin.Engine, conf *config.Config, cache cache.Store) {
     m := &handler{
-        config: conf,
-        cache:  cache,
+        config:  conf,
+        cache:   cache,
+        session: session.New(session.Store(cache)),
     }
 
     // 加载中间件
     engine.Use(m.log())
     engine.Use(m.cors())
-    engine.Use(m.validCookie())
+    engine.Use(m.signature())
 
     // 加载静态资源
     engine.GET("/static/*filepath", func(ctx *gin.Context) {

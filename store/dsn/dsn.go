@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:02:15
  * @LastEditors: reel
- * @LastEditTime: 2023-06-05 07:55:41
+ * @LastEditTime: 2023-06-06 23:09:16
  * @Description: 配置数据库，缓存的链接, 支持本地缓存和本地数据库
  */
 package dsn
@@ -42,7 +42,7 @@ type Dsn struct {
 func (d *Dsn) Link() string {
     switch d.Type {
     case DSN_TYPE_LOCAL, DSN_TYPE_SQLITE:
-        d.link = path.Join(d.Path, d.LocalName)
+        d.link = path.Join(d.Path, d.Name)
     case "redis":
     case "postgres":
         d.link = fmt.Sprintf(

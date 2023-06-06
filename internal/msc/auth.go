@@ -29,6 +29,5 @@ func (m *handler) login() gin.HandlerFunc {
 //             index = indexInstall
 //         }
 //         ctx.String(200, index)
-
 //     }
 // }

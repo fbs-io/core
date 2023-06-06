@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-28 18:06:12
  * @LastEditors: reel
- * @LastEditTime: 2023-06-05 07:49:17
+ * @LastEditTime: 2023-06-07 07:12:29
  * @Description: 中间件
  */
 package msc
@@ -92,8 +92,9 @@ var allowPath = map[string]bool{
     "/ajax/install": true,
 }
 
-// cookie 中间件
-func (m *handler) validCookie() gin.HandlerFunc {
+// 校验签名
+// 如果没有登陆, 则会给一个默认的签名
+func (m *handler) signature() gin.HandlerFunc {
     return func(ctx *gin.Context) {
         if allowPath[ctx.FullPath()] {
             ctx.Next()
@@ -104,18 +105,26 @@ func (m *handler) validCookie() gin.HandlerFunc {
             return
         }
 
-        sid, err := ctx.Cookie(COOKIE_SID)
-        ck := m.cache.Get(sid)
-        if err == nil && ck != "" {
-            m.cache.Set(COOKIE_SID, sid)
-            ctx.SetCookie(COOKIE_SID, sid, 0, "/", "", false, true)
-            ctx.Next()
+        session, err := m.session.Check(ctx.Request, ctx.Writer)
+
+        if err != nil || session == m.session.CookieName() {
+            ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
+            ctx.Abort()
             return
         }
+        // 无论是否有获取到cookie, 均需要重新设置cookie
+        ctx.Next()
+        // sid, err := ctx.Cookie(COOKIE_SID)
+        // ck := m.cache.Get(sid)
+        // if err == nil && ck != "" {
+        //     m.cache.Set(COOKIE_SID, sid)
+        //     ctx.SetCookie(COOKIE_SID, sid, 0, "/", "", false, true)
+        //     ctx.Next()
+        //     return
+        // }
         // ctx.HTML(200, "index.html", "login")
         // ctx.Request.URL.Path = "/"
-        ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMap())
-        ctx.Abort()
+
     }
 }
 
