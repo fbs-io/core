@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 19:52:08
  * @LastEditors: reel
- * @LastEditTime: 2023-05-17 07:53:17
+ * @LastEditTime: 2023-06-11 15:01:28
  * @Description: 用于配置app环境变量
  */
 package env
@@ -18,38 +18,38 @@ import (
 )
 
 const (
-    ENV_APP_NAME         = "DDNS"
+    ENV_PROJECT          = "FBS.Core"
+    ENV_VERSION          = "0.1"
     ENV_MODE_DEV         = "dev"
     ENV_MODE_FAT         = "fat"
     ENV_MODE_PRO         = "pro"
-    ENV_MSC_DEPAULT_PORT = ":6018"
+    ENV_MSC_DEPAULT_PORT = ":6618"
 )
 
 var (
-    active Environment
-    dev    Environment = &environment{
+    dev = &environment{
         value:        ENV_MODE_DEV,
         ginMode:      gin.DebugMode,
         logLevel:     logrus.DebugLevel,
-        project:      ENV_APP_NAME,
         gormLogLevel: logger.Info,
-        then:         time.Now().Unix(),
     }
-    fat Environment = &environment{
+    fat = &environment{
         value:        ENV_MODE_FAT,
         ginMode:      gin.ReleaseMode,
         logLevel:     logrus.DebugLevel,
-        project:      ENV_APP_NAME,
         gormLogLevel: logger.Warn,
-        then:         time.Now().Unix(),
     }
-    pro Environment = &environment{
+    pro = &environment{
         value:        ENV_MODE_PRO,
         ginMode:      gin.ReleaseMode,
         logLevel:     logrus.InfoLevel,
-        project:      ENV_APP_NAME,
         gormLogLevel: logger.Error,
-        then:         time.Now().Unix(),
+    }
+    active = &environment{
+        then:    time.Now().Unix(),
+        project: ENV_PROJECT,
+        version: ENV_VERSION,
+        mscAddr: ENV_MSC_DEPAULT_PORT,
     }
 )
 
@@ -60,7 +60,10 @@ type environment struct {
     super        bool            // 是否为超级用户
     mscAddr      string          // 管理中心http监听地址
     ginMode      string          // gin运行模式
-    project      string          // 项目名称
+    project      string          // 名称
+    version      string          // 版本
+    appName      string          // 项目名称
+    appVersion   string          // 项目版本
     dbInit       string          // DB初始化, 用于开发快速重置数据库
     dataPath     string          // 用于制定数据存储位置
     then         int64           // 系统启动时间
@@ -71,13 +74,16 @@ type environment struct {
 type Environment interface {
     Value() string
     Super() bool
-    MscAddr() string
+    Then() int64
     Mode() string
     DBInit() string
-    Then() int64
+    MscAddr() string
     Project() string
+    Version() string
+    AppName() string
     DataPath() string
     setSupper(is bool)
+    AppVersion() string
     setDBInit(table string)
     setMscAddr(addr string)
     setDataPath(path string)
@@ -134,6 +140,19 @@ func (env *environment) MscAddr() string {
 func (env *environment) Project() string {
     return env.project
 }
+func (env *environment) AppVersion() string {
+    return env.appVersion
+}
+func (env *environment) AppName() string {
+    if env.appName == "" {
+        return env.project
+    }
+    return env.appName
+}
+
+func (env *environment) Version() string {
+    return env.version
+}
 
 // 设置监听地址
 func (env *environment) setMscAddr(addr string) {
@@ -155,12 +174,36 @@ func (env *environment) setDataPath(path string) {
     env.dataPath = path
 }
 
+func Active() Environment {
+    return active
+}
+func SetAppName(name string) {
+    active.appName = name
+}
+
+func SetAppVersion(version string) {
+    active.appVersion = version
+}
+func SetMSCAddr(addr string) {
+    active.mscAddr = addr
+}
+
+func (env *environment) updateActive(envs *environment) {
+    if envs == nil {
+        return
+    }
+    env.value = envs.value
+    env.ginMode = envs.ginMode
+    env.logLevel = envs.logLevel
+    env.gormLogLevel = envs.gormLogLevel
+}
+
 func Init() {
     env := flag.String("env", "", "请输入运行环境:\n dev:开发环境\n fat:测试环境\n pro:正式环境\n")
-    mscAddr := flag.String("mscaddr", ENV_MSC_DEPAULT_PORT, "请输入端口及地址") // 管理端口, 查看当前系统状态
-    super := flag.String("super", "", "")                               // 超级管理员地址
-    dbInit := flag.String("dbinit", "", "")                             // 重置数据库
-    dataPath := flag.String("data_path", "", "")                        // 数据存放路径
+    mscAddr := flag.String("mscaddr", active.mscAddr, "请输入端口及地址") // 管理端口, 查看当前系统状态
+    super := flag.String("super", "", "")                         // 超级管理员地址
+    dbInit := flag.String("dbinit", "", "")                       // 重置数据库
+    dataPath := flag.String("data_path", "", "")                  // 数据存放路径
     flag.Parse()
     mscAddrStr := strings.ToLower(strings.TrimSpace(*mscAddr))
     superStr := strings.TrimSpace(*super)
@@ -168,16 +211,16 @@ func Init() {
     dataPathStr := strings.TrimSpace(*dataPath)
     switch strings.ToLower(strings.TrimSpace(*env)) {
     case ENV_MODE_DEV:
-        active = dev
+        active.updateActive(dev)
     case ENV_MODE_FAT:
-        active = fat
+        active.updateActive(fat)
     case ENV_MODE_PRO:
-        active = pro
+        active.updateActive(pro)
     default:
-        active = pro
+        active.updateActive(pro)
     }
     active.setMscAddr(mscAddrStr)
-    if superStr == ENV_APP_NAME+"1qwer$#@" {
+    if superStr == active.appName+"1qwer$#@" {
         active.setSupper(true)
     }
     if dbInitStr != "" {
@@ -186,9 +229,4 @@ func Init() {
     if dataPathStr != "" {
         active.setDataPath(dataPathStr)
     }
-
-}
-
-func Active() Environment {
-    return active
 }

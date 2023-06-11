@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2023-06-06 06:03:24
+ * @LastEditTime: 2023-06-11 22:43:10
  * @Description: 管理核心组件的启动和运行
  */
 package core
@@ -17,7 +17,6 @@ import (
     "github.com/fbs-io/core/pkg/env"
     "github.com/fbs-io/core/pkg/errorx"
     "github.com/fbs-io/core/pkg/mux"
-    "github.com/fbs-io/core/service"
     "github.com/fbs-io/core/store/cache"
     "github.com/fbs-io/core/store/rdb"
 
@@ -25,13 +24,12 @@ import (
 )
 
 type core struct {
-    config   *config.Config
-    msc      mux.Mux // 用于管理整个服务
-    ams      mux.Mux // 用于应用管理
-    services []service.Service
-    cron     cron.Cron
-    cache    cache.Store
-    rdb      rdb.Store
+    config *config.Config
+    msc    mux.Mux // 用于管理整个服务
+    ams    mux.Mux // 用于应用管理
+    cron   cron.Cron
+    cache  cache.Store
+    rdb    rdb.Store
 }
 
 var _ Core = (*core)(nil)
@@ -62,7 +60,6 @@ func (c *core) coreP() {}
 
 func New() (Core, error) {
     env.Init()
-
     gin.SetMode(env.Active().Mode())
     dms, err := mux.New(
         mux.SetHost(env.Active().MscAddr()),
@@ -89,7 +86,7 @@ func New() (Core, error) {
 
     // 配置中心和其他服务分开启动和关闭
 
-    msc.Init(c.msc.Engine(), c.config, c.cache)
+    msc.Init(c.msc.Engine(), c.config, c.cache, c.cron)
 
     if _, err := pem.GetPems(); err != nil {
         c.msc.Engine().POST("/ajax/install", c.installHandler())

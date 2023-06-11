@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-28 18:06:12
  * @LastEditors: reel
- * @LastEditTime: 2023-06-07 07:12:29
+ * @LastEditTime: 2023-06-11 23:57:29
  * @Description: 中间件
  */
 package msc
@@ -42,7 +42,7 @@ func (m *handler) cors() gin.HandlerFunc {
             //设置缓存时间
             c.Header("Access-Control-Max-Age", "172800")
             //允许客户端传递校验信息比如 cookie (重要)
-            // c.Header("Access-Control-Allow-Credentials", "true")
+            c.Header("Access-Control-Allow-Credentials", "true")
             c.Set("Content-type", "application/json")
         }
 
@@ -105,50 +105,16 @@ func (m *handler) signature() gin.HandlerFunc {
             return
         }
 
-        session, err := m.session.Check(ctx.Request, ctx.Writer)
-
-        if err != nil || session == m.session.CookieName() {
+        sessionKey, sessiionValue, err := m.session.GetWithToken(ctx.Request)
+        // 更新session过期时间
+        m.session.SetWithToken(sessionKey, sessiionValue)
+        if err != nil && sessiionValue == m.session.CookieName() {
             ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
             ctx.Abort()
             return
         }
         // 无论是否有获取到cookie, 均需要重新设置cookie
         ctx.Next()
-        // sid, err := ctx.Cookie(COOKIE_SID)
-        // ck := m.cache.Get(sid)
-        // if err == nil && ck != "" {
-        //     m.cache.Set(COOKIE_SID, sid)
-        //     ctx.SetCookie(COOKIE_SID, sid, 0, "/", "", false, true)
-        //     ctx.Next()
-        //     return
-        // }
-        // ctx.HTML(200, "index.html", "login")
-        // ctx.Request.URL.Path = "/"
 
     }
 }
-
-// func (m *handler) validParams() gin.HandlerFunc {
-//     return func(ctx *gin.Context) {
-//         // ctx.ShouldBindJSON()
-//         // key := ctx.Request.Method + ":" + ctx.FullPath()
-//         // rt := c.requestParams[key]
-//         // if rt != nil {
-//         //     params := reflect.New(rt).Interface()
-//         //     var err error
-//         //     switch ctx.Request.Method {
-//         //     case "GET", "DELETE":
-//         //         err = ctx.ShouldBindWith(&params, binding.Query)
-//         //     case "POST", "PUT":
-//         //         err = ctx.ShouldBindJSON(&params)
-//         //     }
-//         //     if err != nil {
-//         //         ctx.JSON(200, errno.ERRNO_PARAMS_BIND.ToMapWithError(errorx.Wrap(err, "校验参数发生错误")))
-//         //         ctx.Abort()
-//         //         return
-//         //     }
-//         //     ctx.Set(consts.CTX_PARAMS, params)
-//         // }
-//         ctx.Next()
-//     }
-// }

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 22:19:24
  * @LastEditors: reel
- * @LastEditTime: 2023-06-05 06:16:31
+ * @LastEditTime: 2023-06-08 07:53:14
  * @Description: 定义常用的错误代码
  */
 package errno
@@ -49,9 +49,10 @@ var (
 
     // 用户操作错误
     // 请求路径错误
-    ERRNO_AUTH            Errno = New(200, 40000, "用户权限错误")
-    ERRNO_AUTH_NOT_LOGIN  Errno = New(200, 40001, "用户未登陆")
-    ERRNO_AUTH_PERMISSION Errno = New(200, 40002, "用户无访问权限")
+    ERRNO_AUTH             Errno = New(401, 40000, "用户权限错误")
+    ERRNO_AUTH_NOT_LOGIN   Errno = New(401, 40001, "用户未登陆")
+    ERRNO_AUTH_PERMISSION  Errno = New(401, 40002, "用户无访问权限")
+    ERRNO_AUTH_USER_OR_PWD Errno = New(200, 40004, "账号或密码错误")
     // ERRNO_PATH_NOT_FOUND Errno = New(200, 40001, "请求地址错误")
 
     // 权限错误

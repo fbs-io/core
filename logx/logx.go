@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-04 22:37:35
  * @LastEditors: reel
- * @LastEditTime: 2023-06-05 07:50:12
+ * @LastEditTime: 2023-06-11 22:36:18
  * @Description: 请填写简介
  */
 package logx
@@ -202,4 +202,12 @@ func mkInfo(msg string, infoF ...infoFunc) *info {
         infof(infos)
     }
     return infos
+}
+
+func Details(mags map[string]interface{}) infoFunc {
+    return func(i *info) {
+        for k, v := range mags {
+            i.fields[k] = v
+        }
+    }
 }

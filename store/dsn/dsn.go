@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:02:15
  * @LastEditors: reel
- * @LastEditTime: 2023-06-06 23:09:16
+ * @LastEditTime: 2023-06-11 15:48:13
  * @Description: 配置数据库，缓存的链接, 支持本地缓存和本地数据库
  */
 package dsn
@@ -136,7 +136,7 @@ func NewCacheDsn() *Dsn {
     return &Dsn{
         Type: DSN_TYPE_LOCAL,
         Path: path.Join(env.Active().DataPath(), "db/cache/"),
-        Name: env.Active().Project() + ".cache",
+        Name: env.Active().AppName() + ".cache",
         // Log: logx.New(logx.SetLogPath("cache")),
     }
 }
@@ -145,7 +145,7 @@ func NewDBDsn() *Dsn {
     return &Dsn{
         Type: DSN_TYPE_LOCAL,
         Path: "db/rdb/",
-        Name: env.Active().Project() + ".db",
+        Name: env.Active().AppName() + ".db",
     }
 }
 

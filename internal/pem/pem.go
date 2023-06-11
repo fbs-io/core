@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 21:37:52
  * @LastEditors: reel
- * @LastEditTime: 2023-06-05 07:49:37
+ * @LastEditTime: 2023-06-11 15:00:25
  * @Description: 设置项目唯一标识, 用于记录项目是否启动
  */
 package pem
@@ -63,13 +63,13 @@ func GetPemPath() (filePath string, err error) {
             return "", err
         }
 
-        filePath = path.Join(userHome, "AppData", env.Active().Project(), "pems")
+        filePath = path.Join(userHome, "AppData", env.Active().AppName(), "pems")
         err = filex.CreatDir(filePath)
         if err != nil {
             return "", err
         }
     default:
-        filePath = path.Join(userHome, "."+env.Active().Project(), "pems")
+        filePath = path.Join(userHome, "."+env.Active().AppName(), "pems")
         err := filex.CreatDir(filePath)
         if err != nil {
             return "", err

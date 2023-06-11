@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-06 19:21:05
  * @LastEditors: reel
- * @LastEditTime: 2023-06-07 07:32:59
+ * @LastEditTime: 2023-06-08 20:49:35
  * @Description: session 模块
  */
 package session
@@ -32,9 +32,11 @@ type session struct {
 type Session interface {
     sessionP()
     CookieName() string
-    Get(r *http.Request) (cookieValue, value string, err error)
-    Set(w http.ResponseWriter, cookieValue, internalValue string)
-    Check(r *http.Request, w http.ResponseWriter) (sessionValue string, err error)
+    SetWithToken(sessionKey, sessionValue string)
+    GetWithCookie(r *http.Request) (cookieValue, value string, err error)
+    SetWithCookie(w http.ResponseWriter, cookieValue, internalValue string)
+    GetWithToken(r *http.Request) (sessionKey, sessionValue string, err error)
+    GetSessionWithCookie(r *http.Request, w http.ResponseWriter) (sessionValue string, err error)
 }
 
 func (s *session) sessionP() {}
@@ -71,9 +73,9 @@ func New(funs ...optFunc) Session {
 // 自动生成cookie的值, 36位长度
 // 同时把cookie写入缓存中
 // 如果没有设置缓存的值, 以cookie名称补充, 表示为未登陆用户
-func (s *session) Set(w http.ResponseWriter, cookieValue, internalValue string) {
+func (s *session) SetWithCookie(w http.ResponseWriter, cookieValue, internalValue string) {
     if cookieValue == "" {
-        cookieValue = genCookieValue()
+        cookieValue = GenSessionKey()
     }
     if internalValue == "" {
         internalValue = s.cookieName
@@ -90,21 +92,20 @@ func (s *session) Set(w http.ResponseWriter, cookieValue, internalValue string) 
         HttpOnly: true,
     }
     http.SetCookie(w, cookie)
-    return
 }
 
 // 获取cookie
-func (s *session) Get(r *http.Request) (cookieValue, value string, err error) {
+func (s *session) GetWithCookie(r *http.Request) (sessionKey, sessionValue string, err error) {
     cookie, err := r.Cookie(s.cookieName)
     if err != nil {
         return "", "", err
     }
-    val, _ := url.QueryUnescape(cookie.Value)
-    sessionValue := s.store.Get(val)
-    if len(val) != 48 {
+    sessionKey, _ = url.QueryUnescape(cookie.Value)
+    if len(sessionKey) != 48 {
         return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
     }
-    return val, sessionValue, nil
+    sessionValue = s.store.Get(sessionKey)
+    return
 }
 
 // 用于前端cookie存储的名字
@@ -112,13 +113,31 @@ func (s *session) CookieName() string {
     return s.cookieName
 }
 
-func (s *session) Check(r *http.Request, w http.ResponseWriter) (sessionValue string, err error) {
-    cookieValue, sessionValue, err := s.Get(r)
-    s.Set(w, cookieValue, sessionValue)
+// 用于设置默认cookie的场景
+// 如防止中间人攻击等情况
+func (s *session) GetSessionWithCookie(r *http.Request, w http.ResponseWriter) (sessionValue string, err error) {
+    cookieValue, sessionValue, err := s.GetWithCookie(r)
+    s.SetWithCookie(w, cookieValue, sessionValue)
     return
 }
 
-func genCookieValue() string {
+// 设置token
+func (s *session) SetWithToken(sessionKey, sessionValue string) {
+    s.store.Set(sessionKey, sessionValue, cache.SetTTL(time.Duration(s.lifeTime)))
+}
+
+// 获取token
+func (s *session) GetWithToken(r *http.Request) (sessionKey, sessionValue string, err error) {
+    token := r.Header.Get("Authorization")
+    sessionKey, _ = url.QueryUnescape(token)
+    if len(sessionKey) != 48 {
+        return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
+    }
+    sessionValue = s.store.Get(sessionKey)
+    return
+}
+
+func GenSessionKey() string {
     b := make([]byte, 36)
     if _, err := io.ReadFull(rand.Reader, b); err != nil {
         return base64.URLEncoding.EncodeToString([]byte(uuid.New().String()))

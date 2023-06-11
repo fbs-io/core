@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:44:40
  * @LastEditors: reel
- * @LastEditTime: 2023-05-18 22:52:32
+ * @LastEditTime: 2023-06-11 23:02:17
  * @Description: 配置定时任务
  */
 package cron
@@ -142,7 +142,7 @@ func (c *cron) exec(t *task) {
     if !t.isRunning {
         return
     }
-    if t.operationTime >= t.intervalTime {
+    if t.operationTime > t.intervalTime {
         t.operationTime = 0
         go t.job()
     }
