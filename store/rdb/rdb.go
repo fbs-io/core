@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-06-05 07:47:12
+ * @LastEditTime: 2023-06-14 20:30:45
  * @Description: 关系数据库配置
  */
 package rdb
@@ -65,14 +65,13 @@ func New() (s Store) {
     return rdb
 }
 
-// type ping struct {
-// 	Content string
-// }
+type ping struct {
+    Content string
+}
 
-// func (f *ping) TableName() string {
-
-// 	return "sys_ping"
-// }
+func (f *ping) TableName() string {
+    return "sys_ping"
+}
 
 func (rdb *rdbStore) rdbP()        {}
 func (rdb *rdbStore) Name() string { return "RDB" }
@@ -98,37 +97,27 @@ func (rdb *rdbStore) Start() (err error) {
     sqlDB.SetMaxIdleConns(10)
     sqlDB.SetMaxOpenConns(100)
     sqlDB.SetConnMaxLifetime(time.Hour)
+
+    // 用于测试数据库是否正常连接
+    // TODO:更换为系统常用表
+    var p = &ping{
+        Content: "用于测试数据库链接情况, 请勿删除",
+    }
+    if !rdb.db.Migrator().HasTable(p) {
+        err := rdb.db.Migrator().CreateTable(p)
+        if err != nil {
+            return err
+        }
+    }
+
     return nil
 }
 func (rdb *rdbStore) Status() int8 {
-    if rdb.db == nil {
-        return -1
+    err := rdb.db.FirstOrCreate(&ping{"用于测试数据库链接情况, 请勿删除"}).Error
+    if err != nil {
+        return 0
     }
-    // var f = &ping{
-    // 	Content: "用于测试数据库链接情况, 请勿删除",
-    // }
-
-    // if rdb.db.Migrator().HasTable(f) {
-    // 	err := rdb.Query(f)
-    // 	if err == gorm.ErrRecordNotFound {
-    // 		err = rdb.Create(f)
-    // 		if err == nil {
-    // 			return 1
-    // 		}
-    // 	} else if err == nil {
-    // 		return 1
-    // 	}
-    // } else {
-    // 	err := rdb.db.Migrator().CreateTable(f)
-    // 	if err == nil {
-    // 		err = rdb.Create(f)
-    // 		if err == nil {
-    // 			return 1
-    // 		}
-    // 	}
-    // }
-
-    return 0
+    return 1
 }
 
 func (r *rdbStore) Stop() error {
@@ -148,8 +137,8 @@ func (r *rdbStore) SetConfig(optfs ...dsn.DsnFunc) (err error) {
     if link == "" {
         return errorx.New("dsn 为空")
     }
-    // 本地 db 进行的判断, db 为 sqlite
 
+    // 本地 db 进行的判断, db 为 sqlite
     switch rdbDsn.Type {
     case dsn.DSN_TYPE_LOCAL, dsn.DSN_TYPE_SQLITE: // 本地db使用 sqlite
         _, err = os.Stat(rdbDsn.Path)
@@ -192,7 +181,6 @@ func (r *rdbStore) Register(t Tabler, fs ...func()) {
             for _, f := range fs {
                 f()
             }
-            return
         }
         return
     })

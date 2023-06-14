@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-17 22:49:53
  * @LastEditors: reel
- * @LastEditTime: 2023-06-11 23:45:32
+ * @LastEditTime: 2023-06-14 20:26:15
  * @Description: 后台管理中心
  */
 package msc
@@ -15,6 +15,7 @@ import (
     "github.com/fbs-io/core/internal/config"
     "github.com/fbs-io/core/internal/msc/views"
     "github.com/fbs-io/core/logx"
+    "github.com/fbs-io/core/service"
     "github.com/fbs-io/core/session"
     "github.com/fbs-io/core/store/cache"
 
@@ -28,6 +29,7 @@ type handler struct {
     cron      cron.Cron
     procinfos []map[string]interface{}
     sysinfo   map[string]interface{}
+    srvStatus []map[string]interface{}
 }
 
 func Init(engine *gin.Engine, conf *config.Config, cache cache.Store, cron cron.Cron) {
@@ -38,6 +40,7 @@ func Init(engine *gin.Engine, conf *config.Config, cache cache.Store, cron cron.
         cron:      cron,
         procinfos: make([]map[string]interface{}, 0, 20),
         sysinfo:   make(map[string]interface{}, 0),
+        srvStatus: make([]map[string]interface{}, 0),
     }
 
     m.cron.AddJob(
@@ -62,8 +65,10 @@ func Init(engine *gin.Engine, conf *config.Config, cache cache.Store, cron cron.
     m.cron.AddJob(
         func() {
             logx.Sys.Info("系统信息", logx.Details(m.getSysInfo()))
+            m.srvStatus = service.Status()
+            logx.Sys.Info("服务状态", logx.F("details", m.srvStatus))
         },
-        "当前系统资源占用",
+        "当前系统资源使用率及服务状态查询",
         2,
     )
 
@@ -91,7 +96,8 @@ func Init(engine *gin.Engine, conf *config.Config, cache cache.Store, cron cron.
         // 服务器信息
         ajax.GET("/sysinfo", m.sysInfo())
         ajax.GET("/hostinfo", m.hostInfo())
-        ajax.GET("/processinfo", m.processInfo())
+        ajax.GET("/srvstatus", m.getSrvStatus())
+        ajax.POST("/srvrestart", m.setSrvRestart())
     }
 
 }

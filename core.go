@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2023-06-11 22:43:10
+ * @LastEditTime: 2023-06-14 07:16:20
  * @Description: 管理核心组件的启动和运行
  */
 package core
@@ -63,7 +63,7 @@ func New() (Core, error) {
     gin.SetMode(env.Active().Mode())
     dms, err := mux.New(
         mux.SetHost(env.Active().MscAddr()),
-        mux.SetName("DMSC"),
+        mux.SetName("MSC"),
     )
     if err != nil {
         return nil, errorx.Wrap(err, "初始化后台管理服务发生错误")

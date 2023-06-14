@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:44:40
  * @LastEditors: reel
- * @LastEditTime: 2023-06-11 23:02:17
+ * @LastEditTime: 2023-06-14 20:40:25
  * @Description: 配置定时任务
  */
 package cron
@@ -68,7 +68,7 @@ func (c *cron) Start() error {
 }
 
 func (c *cron) Stop() (err error) {
-    c.run = true
+    c.run = false
     return
 }
 

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-06 21:59:57
  * @LastEditors: reel
- * @LastEditTime: 2023-06-07 07:49:52
+ * @LastEditTime: 2023-06-12 06:40:30
  * @Description: 请填写简介
  */
 package session
@@ -18,9 +18,6 @@ import (
 
 func TestSession(t *testing.T) {
     env.Init()
-    fmt.Println(genCookieValue())
     fmt.Println(base64.URLEncoding.EncodeToString([]byte(uuid.New().String())))
-    s := New()
-    // s.Get("123")
-    s.Set(nil, "", "")
+
 }

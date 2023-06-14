@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 07:50:35
  * @LastEditors: reel
- * @LastEditTime: 2023-06-05 07:55:30
+ * @LastEditTime: 2023-06-14 07:11:24
  * @Description: 请填写简介
  */
 package cache
@@ -15,6 +15,11 @@ import (
     "github.com/fbs-io/core/store/dsn"
 
     "github.com/tidwall/buntdb"
+)
+
+const (
+    cacheStatusKey   = "cache::status"
+    cacheStatusValue = "Y"
 )
 
 // TODO: 增加日志
@@ -104,18 +109,27 @@ func (c *cacheStore) Start() error {
     }
     db.Shrink()
     c.db = db
-    c.Set("cache::status", "Y")
     return nil
 }
+
+// 通过插入和写入操作, 测试缓存功能是否正常
 func (c *cacheStore) Status() int8 {
-    if c.db == nil {
-        return -1
+    err := c.Set(cacheStatusKey, cacheStatusValue)
+    if err != nil {
+        return 0
     }
-    s := c.Get("cache::status")
-    if s == "Y" {
-        return 1
+
+    err = c.db.View(func(tx *buntdb.Tx) error {
+        _, err := tx.Get(cacheStatusKey)
+        if err != nil {
+            return err
+        }
+        return err
+    })
+    if err != nil {
+        return 0
     }
-    return 0
+    return 1
 }
 
 func (c *cacheStore) Stop() error {

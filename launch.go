@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:32:22
  * @LastEditors: reel
- * @LastEditTime: 2023-06-05 07:56:02
+ * @LastEditTime: 2023-06-14 21:27:34
  * @Description: 管理接口
  */
 package core
@@ -42,7 +42,6 @@ func (c *core) Run() {
             fmt.Println("系统初始化服务失败", err)
             os.Exit(2)
         }
-
         // 服务启动
         err = service.Start()
         if err != nil {

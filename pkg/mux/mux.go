@@ -3,7 +3,7 @@
  * @Params: 可变参数, 可以指定端口号, 服务名称,
  * @Author: LenLee
  * @Date: 2022-06-24 21:59:45
- * @LastEditTime: 2023-06-05 07:55:08
+ * @LastEditTime: 2023-06-14 21:36:31
  * @LastEditors: reel
  * @FilePath:
  */
@@ -45,6 +45,7 @@ type httpServer struct {
     engine    *gin.Engine
     timeout   time.Duration
     statusUrl string
+    opt       *opts
 }
 
 func New(optF ...OptFunc) (srv Mux, err error) {
@@ -60,21 +61,14 @@ func New(optF ...OptFunc) (srv Mux, err error) {
     }
     engine := gin.New()
     h := &httpServer{
-        name:    opt.name,
-        client:  httpx.New(),
-        timeout: opt.timeout,
-        engine:  engine,
-        server: &http.Server{
-            Addr:           opt.addr,
-            Handler:        engine,
-            MaxHeaderBytes: opt.maxHeaderSize,
-            ReadTimeout:    opt.maxReadTime,
-            WriteTimeout:   opt.maxWriteTIme,
-        },
+        name:      opt.name,
+        client:    httpx.New(),
+        timeout:   opt.timeout,
+        engine:    engine,
+        opt:       opt,
         statusUrl: "/srv_status",
     }
     engine.GET(h.statusUrl, func(ctx *gin.Context) { ctx.JSON(200, 1) })
-    h.server.SetKeepAlivesEnabled(true)
 
     return h, nil
 }
@@ -105,8 +99,15 @@ func (h *httpServer) Stop() error {
 func (h *httpServer) Start() error {
     var err error
     go func() {
+        h.server = &http.Server{
+            Addr:           h.opt.addr,
+            Handler:        h.engine,
+            MaxHeaderBytes: h.opt.maxHeaderSize,
+            ReadTimeout:    h.opt.maxReadTime,
+            WriteTimeout:   h.opt.maxWriteTIme,
+        }
+        h.server.SetKeepAlivesEnabled(true)
         if err = h.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-            h.status = 0
             return
         }
     }()
@@ -117,5 +118,5 @@ func (h *httpServer) Engine() *gin.Engine {
     return h.engine
 }
 func (h *httpServer) SetAddr(addr string) {
-    h.server.Addr = addr
+    h.opt.addr = addr
 }

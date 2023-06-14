@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-10 20:16:56
  * @LastEditors: reel
- * @LastEditTime: 2023-06-12 00:00:25
+ * @LastEditTime: 2023-06-12 07:12:37
  * @Description: 请填写简介
  */
 package msc
@@ -85,12 +85,6 @@ func (h *handler) sysInfo() gin.HandlerFunc {
     }
 }
 
-func (h *handler) processInfo() gin.HandlerFunc {
-    return func(ctx *gin.Context) {
-        ctx.JSON(200, errno.ERRNO_OK.ToMapWithData(h.procinfos))
-    }
-}
-
 type processInfo struct {
     PID        int32   `json:"pid"`
     PName      string  `json:"pname"`
@@ -105,6 +99,7 @@ func (p processInfos) Len() int           { return len(p) }
 func (p processInfos) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 func (p processInfos) Less(i, j int) bool { return p[i].CpuPercent > p[j].CpuPercent }
 
+// 获取进程相关信息
 func (m *handler) getProcessInfo() processInfos {
     var procinfos = make(processInfos, 0, 100)
     processes, _ := process.Processes()
@@ -128,16 +123,18 @@ func (m *handler) getProcessInfo() processInfos {
     return procinfos[:20]
 }
 
+// 获取系统资源占用信息
 func (m *handler) getSysInfo() map[string]interface{} {
-    cc, _ := cpu.Percent(time.Millisecond*200, false)
-    v, _ := mem.VirtualMemory()
     memStats := new(runtime.MemStats)
     runtime.ReadMemStats(memStats)
+
+    // cpu,内存
+    cpuPercents, _ := cpu.Percent(time.Millisecond*200, false)
+    virMem, _ := mem.VirtualMemory()
     appmem := memStats.Alloc / mb
-    disks, _ := disk.Usage("./")
 
+    // 网络相关
     netios, _ := net.IOCounters(true)
-
     var sends, recv uint64
     for _, netio := range netios {
         if netio.Name == "lo0" {
@@ -147,6 +144,8 @@ func (m *handler) getSysInfo() map[string]interface{} {
         recv += netio.BytesRecv / mb
     }
 
+    // 磁盘相关
+    disks, _ := disk.Usage("./")
     diskios, _ := disk.IOCounters()
     var read, write uint64
     for _, disk := range diskios {
@@ -155,10 +154,17 @@ func (m *handler) getSysInfo() map[string]interface{} {
         write += disk.WriteBytes / mb
     }
 
+    // cpu使用率处理, 如果多核cpu取平均值
+    var cpup float64
+    for _, cpupercent := range cpuPercents {
+        cpup += cpupercent
+    }
+    cpup /= float64(len(cpuPercents))
+
     data := map[string]interface{}{
-        "cpu":     fmt.Sprintf("%.1f", cc[0]),
-        "memp":    fmt.Sprintf("%.1f", (float64(v.Total)-float64(v.Active))/float64(v.Total)*100),
-        "appmemp": fmt.Sprintf("%.1f", float64(appmem)/float64(v.Total/mb)*100),
+        "cpu":     fmt.Sprintf("%.1f", cpup),
+        "memp":    fmt.Sprintf("%.1f", (float64(virMem.Total)-float64(virMem.Active))/float64(virMem.Total)*100),
+        "appmemp": fmt.Sprintf("%.1f", float64(appmem)/float64(virMem.Total/mb)*100),
         "appmem":  fmt.Sprintf("%.1f", float64(appmem)),
         "disk":    fmt.Sprintf("%.1f", disks.UsedPercent),
         "netio": map[string]interface{}{
@@ -251,7 +257,6 @@ func timeSincePro(then int64) (string, string) {
         diff, diffStr = computeTimeDiff(diff)
         timeStrs = append(timeStrs, diffStr)
     }
-    // timeStrs := strings.Split(timeStr, ", ")
     if len(timeStrs) < 2 {
         return strings.Join(timeStrs, ", "), ""
     }
