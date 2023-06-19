@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2023-06-06 06:14:11
+ * @LastEditTime: 2023-06-18 19:50:46
  * @Description: 系统配置相关操作
  */
 package core
@@ -75,6 +75,10 @@ func (c *core) install() (err error) {
     if err != nil {
         return errorx.Wrap(err, "DB服务初始化失败")
     }
+
+    // 加入
+    s := &Sources{}
+    c.rdb.Register(s, func() error { return c.rdb.DB().Table(s.TableName()).CreateInBatches(sources, len(sources)).Error })
 
     service.Append(c.rdb)
     logx.Sys.Info("完成数据库配置")

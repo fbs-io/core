@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-06 19:21:05
  * @LastEditors: reel
- * @LastEditTime: 2023-06-08 20:49:35
+ * @LastEditTime: 2023-06-14 22:19:20
  * @Description: session 模块
  */
 package session
@@ -26,6 +26,7 @@ import (
 type session struct {
     lifeTime   int // 秒
     cookieName string
+    prefix     string
     store      cache.Store
 }
 
@@ -60,11 +61,14 @@ func New(funs ...optFunc) Session {
         opt.store.Start()
 
     }
-
+    if opt.prefix == "" {
+        opt.prefix = fmt.Sprintf("%d", time.Now().UnixNano())
+    }
     s := &session{
         lifeTime:   opt.lifeTime,
         cookieName: opt.cookieName,
         store:      opt.store,
+        prefix:     opt.prefix,
     }
 
     return s
@@ -80,7 +84,7 @@ func (s *session) SetWithCookie(w http.ResponseWriter, cookieValue, internalValu
     if internalValue == "" {
         internalValue = s.cookieName
     }
-    s.store.Set(cookieValue, internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
+    s.store.Set(fmt.Sprintf("%s::%s", s.prefix, cookieValue), internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
     cookie := &http.Cookie{
         Name:     s.cookieName,
         Value:    url.QueryEscape(cookieValue),
@@ -104,7 +108,7 @@ func (s *session) GetWithCookie(r *http.Request) (sessionKey, sessionValue strin
     if len(sessionKey) != 48 {
         return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
     }
-    sessionValue = s.store.Get(sessionKey)
+    sessionValue = s.store.Get(fmt.Sprintf("%s::%s", s.prefix, sessionKey))
     return
 }
 
@@ -123,7 +127,7 @@ func (s *session) GetSessionWithCookie(r *http.Request, w http.ResponseWriter) (
 
 // 设置token
 func (s *session) SetWithToken(sessionKey, sessionValue string) {
-    s.store.Set(sessionKey, sessionValue, cache.SetTTL(time.Duration(s.lifeTime)))
+    s.store.Set(fmt.Sprintf("%s::%s", s.prefix, sessionKey), sessionValue, cache.SetTTL(time.Duration(s.lifeTime)))
 }
 
 // 获取token
@@ -133,7 +137,7 @@ func (s *session) GetWithToken(r *http.Request) (sessionKey, sessionValue string
     if len(sessionKey) != 48 {
         return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
     }
-    sessionValue = s.store.Get(sessionKey)
+    sessionValue = s.store.Get(fmt.Sprintf("%s::%s", s.prefix, sessionKey))
     return
 }
 

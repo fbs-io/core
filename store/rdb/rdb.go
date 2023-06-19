@@ -2,13 +2,15 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-06-14 20:30:45
+ * @LastEditTime: 2023-06-20 06:48:01
  * @Description: 关系数据库配置
  */
 package rdb
 
 import (
+    "fmt"
     "os"
+    "reflect"
     "strings"
     "time"
 
@@ -24,14 +26,17 @@ import (
 )
 
 const (
-    TABLE_INIT_ALL   = "all"
-    TABLE_SYS_APIDOC = "sys_apidoc"
-    TABLE_SYS_MEANS  = "sys_means"
+    TABLE_INIT_ALL = "all"
+
+// TABLE_SYS_APIDOC = "sys_apidoc"
+// TABLE_SYS_MEANS  = "sys_means"
 )
 
 type rdbStore struct {
     db          *gorm.DB
     dial        gorm.Dialector
+    statTab     Tabler
+    tablers     map[string]Tabler
     migrateList []func() error
 }
 
@@ -41,9 +46,8 @@ type Store interface {
     Start() error
     Stop() error
     Status() int8
-    Register(t Tabler, fs ...func())
+    Register(t Tabler, fs ...RegisterFunc)
     SetConfig(fs ...dsn.DsnFunc) error
-    AutoMigrate() (err error)
     DB() *gorm.DB
     // Create(t Tabler) (err error)
     // Delete(t Tabler, bfs ...BuildFunc) (err error)
@@ -57,20 +61,13 @@ var _ Store = (*rdbStore)(nil)
 
 var rdb = &rdbStore{
     db:          &gorm.DB{},
+    tablers:     make(map[string]Tabler, 1000),
     migrateList: make([]func() error, 0, 100),
 }
 
 func New() (s Store) {
 
     return rdb
-}
-
-type ping struct {
-    Content string
-}
-
-func (f *ping) TableName() string {
-    return "sys_ping"
 }
 
 func (rdb *rdbStore) rdbP()        {}
@@ -98,22 +95,16 @@ func (rdb *rdbStore) Start() (err error) {
     sqlDB.SetMaxOpenConns(100)
     sqlDB.SetConnMaxLifetime(time.Hour)
 
-    // 用于测试数据库是否正常连接
-    // TODO:更换为系统常用表
-    var p = &ping{
-        Content: "用于测试数据库链接情况, 请勿删除",
-    }
-    if !rdb.db.Migrator().HasTable(p) {
-        err := rdb.db.Migrator().CreateTable(p)
-        if err != nil {
-            return err
-        }
-    }
-
-    return nil
+    return rdb.autoMigrate()
 }
+
+// 通过查询获取当前db状态
+// 如果没有表, 默认当前不可用
 func (rdb *rdbStore) Status() int8 {
-    err := rdb.db.FirstOrCreate(&ping{"用于测试数据库链接情况, 请勿删除"}).Error
+    if rdb.statTab == nil {
+        return 0
+    }
+    err := rdb.db.FirstOrCreate(&(rdb.statTab)).Error
     if err != nil {
         return 0
     }
@@ -161,13 +152,15 @@ func (r *rdbStore) SetConfig(optfs ...dsn.DsnFunc) (err error) {
 // 迁移表
 // 如果表结构发生变化, 需要启动时设置 dbinit=tableaName 参数, 删除旧表并创建新表
 // 在表创建后, 可以执行一些自定义的方法, 主要用于初始化数据写入
-func (r *rdbStore) Register(t Tabler, fs ...func()) {
+func (r *rdbStore) Register(t Tabler, fs ...RegisterFunc) {
+    r.tablers[t.TableName()] = t
+    if r.statTab == nil {
+        r.statTab = t
+    }
     r.migrateList = append(r.migrateList, func() (err error) {
+        // 从命令行重置所有表或部分表
         if strings.Contains(env.Active().DBInit(), t.TableName()) ||
-            env.Active().DBInit() == TABLE_INIT_ALL ||
-            // api文档表和资源表在开发模式下, 每次均重置
-            (env.Active().Value() == env.ENV_MODE_DEV && t.TableName() == TABLE_SYS_APIDOC) ||
-            (env.Active().Value() == env.ENV_MODE_DEV && t.TableName() == TABLE_SYS_MEANS) {
+            env.Active().DBInit() == TABLE_INIT_ALL {
             err = r.db.Migrator().DropTable(t)
             if err != nil {
                 return
@@ -179,18 +172,21 @@ func (r *rdbStore) Register(t Tabler, fs ...func()) {
                 return
             }
             for _, f := range fs {
-                f()
+                err = f()
+                if err != nil {
+                    return
+                }
             }
         }
         return
     })
 }
 
-func (r *rdbStore) AutoMigrate() (err error) {
+func (r *rdbStore) autoMigrate() (err error) {
     for _, fs := range r.migrateList {
         e := fs()
         if e != nil {
-            err = errorx.Wrap(e, "迁移失败")
+            err = errorx.Wrap(e, "表迁移操作失败")
         }
     }
     return
@@ -198,5 +194,37 @@ func (r *rdbStore) AutoMigrate() (err error) {
 
 type Tabler interface {
     TableName() string
-    // GetID() uint
 }
+
+// 请传入一个有 TableName 方法的 结构体切片/数组
+//
+// 例子: []*A{&A{C1:"abc"}, &A{C1:"b"}}
+func (r *rdbStore) CreateInBatches(ts interface{}) (err error) {
+    defer func() {
+        e := recover()
+        if e != nil {
+            err = errorx.New(fmt.Sprintf("TableName method not found at index 1, error: %v", e))
+            return
+        }
+    }()
+    reflectValue := reflect.Indirect(reflect.ValueOf(ts))
+    var tableName string
+    switch reflectValue.Kind() {
+    case reflect.Slice, reflect.Array:
+        if reflectValue.Len() > 0 {
+            v := reflectValue.Index(0)
+            rm := v.MethodByName("TableName")
+            v2 := rm.Call(make([]reflect.Value, 0))[0]
+            tableName = fmt.Sprintf("%v", v2)
+        }
+        err = r.db.Table(tableName).CreateInBatches(ts, reflectValue.Len()).Error
+        if err != nil {
+            return errorx.Wrap(err, "batches create error")
+        }
+    default:
+        return errorx.New("please enter a slice or array containing the TableName method")
+    }
+    return
+}
+
+type RegisterFunc func() error

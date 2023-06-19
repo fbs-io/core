@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-06 22:40:43
  * @LastEditors: reel
- * @LastEditTime: 2023-06-06 23:27:26
+ * @LastEditTime: 2023-06-14 22:13:32
  * @Description: session初始化相关设置
  */
 package session
@@ -11,6 +11,7 @@ import "github.com/fbs-io/core/store/cache"
 
 type option struct {
     lifeTime   int
+    prefix     string
     cookieName string
     store      cache.Store
 }
@@ -38,5 +39,11 @@ func Cookiename(cookieName string) optFunc {
 func Store(cache cache.Store) optFunc {
     return func(opt *option) {
         opt.store = cache
+    }
+}
+
+func Prefix(prefix string) optFunc {
+    return func(opt *option) {
+        opt.prefix = prefix
     }
 }

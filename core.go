@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2023-06-14 07:16:20
+ * @LastEditTime: 2023-06-18 18:57:15
  * @Description: 管理核心组件的启动和运行
  */
 package core
@@ -48,6 +48,10 @@ type Core interface {
     // gin的engine, 用于原生gin方法
     // 可以更灵活的实现开发
     Engine() *gin.Engine
+
+    // 基于gin.Engine封装, 用于快速开发
+
+    Group(elativePath string, handlers ...HandlerFunc) RouterGroup
 
     // 缓存
     Cache() cache.Store
