@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:02:15
  * @LastEditors: reel
- * @LastEditTime: 2023-06-11 15:48:13
+ * @LastEditTime: 2023-06-21 05:55:58
  * @Description: 配置数据库，缓存的链接, 支持本地缓存和本地数据库
  */
 package dsn
@@ -26,16 +26,15 @@ const (
 )
 
 type Dsn struct {
-    link      string
-    Type      string
-    Path      string
-    Name      string
-    Host      string
-    Port      string
-    User      string
-    Pwd       string
-    LocalName string
-    Log       logx.Logger
+    link string
+    Type string
+    Path string
+    Name string
+    Host string
+    Port string
+    User string
+    Pwd  string
+    Log  logx.Logger
 }
 
 // TODO: 增加 mysql postgre redis 等
@@ -90,13 +89,6 @@ func SetName(name string) DsnFunc {
     }
 }
 
-// 设置 db 名称
-func SetLocalName(name string) DsnFunc {
-    return func(Dsn *Dsn) {
-        Dsn.LocalName = name
-    }
-}
-
 func SetHost(host string) DsnFunc {
     return func(Dsn *Dsn) {
         Dsn.Host = host
@@ -137,7 +129,6 @@ func NewCacheDsn() *Dsn {
         Type: DSN_TYPE_LOCAL,
         Path: path.Join(env.Active().DataPath(), "db/cache/"),
         Name: env.Active().AppName() + ".cache",
-        // Log: logx.New(logx.SetLogPath("cache")),
     }
 }
 

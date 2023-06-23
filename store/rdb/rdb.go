@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-06-20 06:48:01
+ * @LastEditTime: 2023-06-23 07:11:47
  * @Description: 关系数据库配置
  */
 package rdb
@@ -42,19 +42,17 @@ type rdbStore struct {
 
 type Store interface {
     rdbP()
-    Name() string
-    Start() error
-    Stop() error
-    Status() int8
-    Register(t Tabler, fs ...RegisterFunc)
-    SetConfig(fs ...dsn.DsnFunc) error
     DB() *gorm.DB
-    // Create(t Tabler) (err error)
-    // Delete(t Tabler, bfs ...BuildFunc) (err error)
-    // CreateInBatches(ts interface{}) (err error)
-    // Query(t Tabler, bfs ...BuildFunc) (err error)
-    // Updates(t Tabler, bfs ...BuildFunc) (err error)
-    // Queries(ts interface{}, bfs ...BuildFunc) (err error)
+
+    // service.Service接口
+    Name() string
+    Stop() error
+    Start() error
+    Status() int8
+
+    // DB 相关
+    SetConfig(fs ...dsn.DsnFunc) error
+    Register(t Tabler, fs ...RegisterFunc)
 }
 
 var _ Store = (*rdbStore)(nil)
@@ -66,26 +64,25 @@ var rdb = &rdbStore{
 }
 
 func New() (s Store) {
-
     return rdb
 }
 
-func (rdb *rdbStore) rdbP()        {}
-func (rdb *rdbStore) Name() string { return "RDB" }
-func (rdb *rdbStore) DB() *gorm.DB { return rdb.db }
+func (store *rdbStore) rdbP()        {}
+func (store *rdbStore) Name() string { return "RDB" }
+func (store *rdbStore) DB() *gorm.DB { return store.db }
 
-func (rdb *rdbStore) Start() (err error) {
-    if rdb.dial == nil {
+func (store *rdbStore) Start() (err error) {
+    if store.dial == nil {
         return errorx.New("没有可用的DSN")
     }
-    rdb.db, err = gorm.Open(rdb.dial, &gorm.Config{
+    store.db, err = gorm.Open(store.dial, &gorm.Config{
         Logger: logger.Default.LogMode(env.Active().GormLogLevel()),
     })
     if err != nil {
         return errorx.Wrap(err, "数据库链接失败")
     }
     // 配置链接时间等
-    sqlDB, err := rdb.db.DB()
+    sqlDB, err := store.db.DB()
     if err != nil {
         return err
     }
@@ -95,31 +92,31 @@ func (rdb *rdbStore) Start() (err error) {
     sqlDB.SetMaxOpenConns(100)
     sqlDB.SetConnMaxLifetime(time.Hour)
 
-    return rdb.autoMigrate()
+    return store.autoMigrate()
 }
 
 // 通过查询获取当前db状态
 // 如果没有表, 默认当前不可用
-func (rdb *rdbStore) Status() int8 {
-    if rdb.statTab == nil {
+func (store *rdbStore) Status() int8 {
+    if store.statTab == nil {
         return 0
     }
-    err := rdb.db.FirstOrCreate(&(rdb.statTab)).Error
+    err := store.db.FirstOrCreate(&(store.statTab)).Error
     if err != nil {
         return 0
     }
     return 1
 }
 
-func (r *rdbStore) Stop() error {
-    sqlDB, err := r.db.DB()
+func (store *rdbStore) Stop() error {
+    sqlDB, err := store.db.DB()
     if err != nil {
         return err
     }
     return sqlDB.Close()
 }
 
-func (r *rdbStore) SetConfig(optfs ...dsn.DsnFunc) (err error) {
+func (store *rdbStore) SetConfig(optfs ...dsn.DsnFunc) (err error) {
     rdbDsn := dsn.NewDBDsn()
     for _, optf := range optfs {
         optf(rdbDsn)
@@ -139,12 +136,12 @@ func (r *rdbStore) SetConfig(optfs ...dsn.DsnFunc) (err error) {
                 return err
             }
         }
-        rdb.dial = sqlite.Open(link)
+        store.dial = sqlite.Open(link)
 
     case dsn.DSN_TYPE_PGSQL:
-        rdb.dial = postgres.Open(link)
+        store.dial = postgres.Open(link)
     case dsn.DSN_TYPE_MYSQL:
-        rdb.dial = mysql.Open(link)
+        store.dial = mysql.Open(link)
     }
     return nil
 }
@@ -152,22 +149,23 @@ func (r *rdbStore) SetConfig(optfs ...dsn.DsnFunc) (err error) {
 // 迁移表
 // 如果表结构发生变化, 需要启动时设置 dbinit=tableaName 参数, 删除旧表并创建新表
 // 在表创建后, 可以执行一些自定义的方法, 主要用于初始化数据写入
-func (r *rdbStore) Register(t Tabler, fs ...RegisterFunc) {
-    r.tablers[t.TableName()] = t
-    if r.statTab == nil {
-        r.statTab = t
-    }
-    r.migrateList = append(r.migrateList, func() (err error) {
+func (store *rdbStore) Register(t Tabler, fs ...RegisterFunc) {
+    store.tablers[t.TableName()] = t
+
+    store.migrateList = append(store.migrateList, func() (err error) {
+        if store.statTab == nil {
+            store.statTab = t
+        }
         // 从命令行重置所有表或部分表
         if strings.Contains(env.Active().DBInit(), t.TableName()) ||
             env.Active().DBInit() == TABLE_INIT_ALL {
-            err = r.db.Migrator().DropTable(t)
+            err = store.db.Migrator().DropTable(t)
             if err != nil {
                 return
             }
         }
-        if !r.db.Migrator().HasTable(t) {
-            err = r.db.AutoMigrate(t)
+        if !store.db.Migrator().HasTable(t) {
+            err = store.db.AutoMigrate(t)
             if err != nil {
                 return
             }

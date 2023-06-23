@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2023-06-18 19:50:46
+ * @LastEditTime: 2023-06-22 06:54:29
  * @Description: 系统配置相关操作
  */
 package core
@@ -44,7 +44,6 @@ func (c *core) install() (err error) {
     // 缓存
     err = c.cache.SetConfig(
         dsn.SetType(c.config.CacheType),
-        dsn.SetLocalName(c.config.CacheName),
         dsn.SetPath(path.Join(c.config.DataPath, "cache")),
         dsn.SetHost(c.config.CacheHost),
         dsn.SetPort(c.config.CachePort),
@@ -64,7 +63,6 @@ func (c *core) install() (err error) {
     // db初始化
     err = c.rdb.SetConfig(
         dsn.SetType(c.config.DbType),
-        dsn.SetLocalName(c.config.CacheName),
         dsn.SetPath(path.Join(c.config.DataPath, "db")),
         dsn.SetHost(c.config.DBHost),
         dsn.SetPort(c.config.DBPort),
