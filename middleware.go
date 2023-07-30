@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2023-07-19 22:42:53
+ * @LastEditTime: 2023-07-23 22:44:10
  * @Description: 常用的中间件
  */
 package core
@@ -104,7 +104,8 @@ func SignatureMiddleware(c Core) gin.HandlerFunc {
 			return
 		}
 		sessionKey, sessiionValue, err := c.Session().GetWithToken(ctx.Request)
-		if err != nil && sessiionValue == c.Session().CookieName() {
+		fmt.Println(sessionKey, sessiionValue, err)
+		if err != nil {
 			ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
 			ctx.Abort()
 			return
@@ -150,5 +151,17 @@ func ParamsMiddleware(c Core) gin.HandlerFunc {
 		ctx.Set(CTX_PARAMS, params)
 		tx := c.RDB().BuildQueryWithParams(rv)
 		ctx.Set(CTX_TX, tx)
+	}
+}
+
+// 限流器
+func LimiterMiddleware(c Core) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		if !c.Limiter().Allow() {
+			ctx.JSON(200, errno.ERRNO_TOO_MANY_REQUESTS.ToMap())
+			ctx.Abort()
+			return
+		}
+		ctx.Next()
 	}
 }

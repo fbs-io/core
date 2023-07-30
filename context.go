@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2023-07-19 20:32:17
+ * @LastEditTime: 2023-07-20 07:06:48
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -21,8 +21,6 @@ import (
 
 type context struct {
 	ctx *gin.Context
-	tx  *gorm.DB
-	// core *Core
 }
 
 const (

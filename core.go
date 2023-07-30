@@ -2,13 +2,14 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2023-07-19 07:40:50
+ * @LastEditTime: 2023-07-30 22:23:40
  * @Description: 管理核心组件的启动和运行
  */
 package core
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/fbs-io/core/cron"
 	"github.com/fbs-io/core/internal/config"
@@ -20,6 +21,7 @@ import (
 	"github.com/fbs-io/core/session"
 	"github.com/fbs-io/core/store/cache"
 	"github.com/fbs-io/core/store/rdb"
+	"golang.org/x/time/rate"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,6 +34,7 @@ type core struct {
 	cache   cache.Store
 	rdb     rdb.Store
 	session session.Session
+	limiter *rate.Limiter
 }
 
 var _ Core = (*core)(nil)
@@ -63,11 +66,25 @@ type Core interface {
 
 	// session
 	Session() session.Session
+
+	// 限流器
+	Limiter() *rate.Limiter
+
+	// 配置
+	Config() *config.Config
 }
 
 func (c *core) coreP() {}
 
-func New() (Core, error) {
+func New(funcs ...FuncCores) (Core, error) {
+	var opt = &options{
+		limitSize:   200 * runtime.NumCPU(),
+		limitNumber: 200 * runtime.NumCPU(),
+	}
+	for _, fs := range funcs {
+		fs(opt)
+	}
+
 	env.Init()
 	gin.SetMode(env.Active().Mode())
 	dms, err := mux.New(
@@ -85,12 +102,13 @@ func New() (Core, error) {
 		return nil, errorx.Wrap(err, "初始化应用管理服务发生错误")
 	}
 	c := &core{
-		msc:    dms,
-		ams:    ams,
-		rdb:    rdb.New(),
-		cron:   cron.New(),
-		cache:  cache.New(),
-		config: &config.Config{},
+		msc:     dms,
+		ams:     ams,
+		rdb:     rdb.New(),
+		cron:    cron.New(),
+		cache:   cache.New(),
+		config:  &config.Config{},
+		limiter: rate.NewLimiter(rate.Limit(opt.limitNumber), opt.limitSize),
 	}
 	c.session = session.New(session.Store(c.cache))
 	// 配置中心和其他服务分开启动和关闭
