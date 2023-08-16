@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-04 22:37:35
  * @LastEditors: reel
- * @LastEditTime: 2023-07-23 22:39:37
+ * @LastEditTime: 2023-08-15 22:53:03
  * @Description: 请填写简介
  */
 package logx
@@ -24,8 +24,9 @@ import (
 var _ Logger = (*logger)(nil)
 
 type logger struct {
-	log  *logrus.Logger
-	file *os.File
+	log           *logrus.Logger
+	file          *os.File
+	slowThreshold time.Duration
 }
 
 type Logger interface {
@@ -46,6 +47,7 @@ func New(optF ...optFunc) (Logger, error) {
 		timestampFormat: "2006-01-02 15:04:05.000",
 		logMaxage:       365,
 		logRotationTime: 7,
+		slowThreshold:   5 * time.Second,
 	}
 	if env.Active() == nil {
 		o.level = logrus.InfoLevel
@@ -75,7 +77,6 @@ func New(optF ...optFunc) (Logger, error) {
 	if file != nil {
 		log.Out = file
 	}
-
 	// 分割文件
 	logWriter, _ := rotatelogs.New(
 		// 分割后的文件名称
@@ -104,8 +105,9 @@ func New(optF ...optFunc) (Logger, error) {
 	})
 	log.AddHook(lfHook)
 	return &logger{
-		log:  log,
-		file: file,
+		log:           log,
+		file:          file,
+		slowThreshold: o.slowThreshold,
 	}, nil
 }
 

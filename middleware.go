@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2023-07-23 22:44:10
+ * @LastEditTime: 2023-08-03 23:21:40
  * @Description: 常用的中间件
  */
 package core
@@ -31,14 +31,15 @@ func CorsMiddleware(c Core) gin.HandlerFunc {
 		origin := ctx.Request.Header.Get("Origin") //请求头部
 		if origin != "" {
 			//接收客户端发送的origin （重要！）
-			ctx.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			ctx.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			ctx.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 			//服务器支持的所有跨域请求的方法
-			ctx.Header("Access-Control-Allow-Origin", "*")
+			ctx.Header("Access-Control-Allow-Origin", origin)
 			ctx.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE,UPDATE")
 			//允许跨域设置可以返回其他子段，可以自定义字段
-			ctx.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, Content-Length, X-CSRF-Token, Token,session")
+			ctx.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, Content-Length, X-CSRF-TOKEN, Token,session")
 			// 允许浏览器（客户端）可以解析的头部 （重要）
-			ctx.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers")
+			ctx.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, Set-Cookie, X-CSRF-TOKEN")
 			//设置缓存时间
 			ctx.Header("Access-Control-Max-Age", "172800")
 			//允许客户端传递校验信息比如 cookie (重要)
@@ -97,24 +98,42 @@ func resource(ctx *gin.Context) string {
 
 // 校验签名中间件
 // 如果没有登陆, 则会给一个默认的签名
-func SignatureMiddleware(c Core) gin.HandlerFunc {
+// Singular: 默认 token 模式， 同时可以选择cookie，sid方式
+func SignatureMiddleware(c Core, singular string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		if allowResource[resource(ctx)] {
 			ctx.Next()
 			return
 		}
-		sessionKey, sessiionValue, err := c.Session().GetWithToken(ctx.Request)
-		fmt.Println(sessionKey, sessiionValue, err)
-		if err != nil {
-			ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
-			ctx.Abort()
-			return
+		switch singular {
+		case "cookie":
+			sessionKey, sessiionValue, err := c.Session().GetWithCookie(ctx.Request)
+			if err != nil {
+				ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
+				ctx.Abort()
+				return
+			}
+			c.Session().SetWithCookie(ctx.Writer, sessionKey, sessiionValue)
+		case "sid":
+			sessionKey, sessiionValue, err := c.Session().GetWithSid(ctx.Request)
+			if err != nil {
+				ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
+				ctx.Abort()
+				return
+			}
+			c.Session().SetWithSid(ctx.Writer, sessionKey, sessiionValue)
+		default:
+			sessionKey, sessiionValue, err := c.Session().GetWithToken(ctx.Request)
+			if err != nil {
+				ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
+				ctx.Abort()
+				return
+			}
+			// 更新session过期时间
+			c.Session().SetWithToken(sessionKey, sessiionValue)
+			ctx.Next()
+
 		}
-		// 更新session过期时间
-		// c.Session().SetWithToken(sessionKey, sessiionValue)
-		c.Session().SetWithCookie(ctx.Writer, sessionKey, sessiionValue)
-		// 无论是否有获取到cookie, 均需要重新设置cookie
-		ctx.Next()
 
 	}
 }

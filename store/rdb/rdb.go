@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-07-19 07:42:39
+ * @LastEditTime: 2023-08-15 23:25:13
  * @Description: 关系数据库配置
  */
 package rdb
@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fbs-io/core/logx"
 	"github.com/fbs-io/core/pkg/env"
 	"github.com/fbs-io/core/pkg/errorx"
 	"github.com/fbs-io/core/store/dsn"
@@ -22,7 +23,6 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
 const (
@@ -76,8 +76,10 @@ func (store *rdbStore) Start() (err error) {
 	if store.dial == nil {
 		return errorx.New("没有可用的DSN")
 	}
+
 	store.db, err = gorm.Open(store.dial, &gorm.Config{
-		Logger: logger.Default.LogMode(env.Active().GormLogLevel()),
+		// Logger: logger.Default.LogMode(env.Active().GormLogLevel()),
+		Logger: logx.DB.LogMode(env.Active().GormLogLevel()),
 	})
 	if err != nil {
 		return errorx.Wrap(err, "数据库链接失败")

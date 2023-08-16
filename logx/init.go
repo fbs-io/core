@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:04:14
  * @LastEditors: reel
- * @LastEditTime: 2023-07-23 22:38:33
+ * @LastEditTime: 2023-08-15 23:23:39
  * @Description: 用于管理多个日志
  */
 
@@ -12,7 +12,7 @@ import "github.com/fbs-io/core/pkg/errorx"
 
 var (
 	Sys Logger
-	DB  Logger
+	DB  *gormLogger
 	APP Logger
 )
 
@@ -24,7 +24,7 @@ func Init(optF ...optFunc) (err error) {
 		return errorx.Wrap(err, "系统日志配置发生错误")
 	}
 	DBOptfs := append(optF, SetLogPath("db"), SetLogName("db.log"))
-	DB, err = New(DBOptfs...)
+	DB, err = NewGormLogger(DBOptfs...)
 	if err != nil {
 		return errorx.Wrap(err, "DB日志配置发生错误")
 	}
