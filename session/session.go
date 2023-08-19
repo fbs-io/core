@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-06 19:21:05
  * @LastEditors: reel
- * @LastEditTime: 2023-08-03 00:22:42
+ * @LastEditTime: 2023-08-17 06:50:17
  * @Description: session 模块
  */
 package session
@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/fbs-io/core/store/cache"
@@ -40,6 +41,12 @@ type Session interface {
 	GetSessionWithCookie(r *http.Request, w http.ResponseWriter) (sessionValue string, err error)
 	SetWithSid(w http.ResponseWriter, cookieValue, internalValue string)
 	GetWithSid(r *http.Request) (sessionKey, sessionValue string, err error)
+
+	// 服务端想客户端设置cookie, 使用请求头的X-CSRF-TOKEN字段
+	SetWithCsrfToken(w http.ResponseWriter, cookieValue, internalValue string)
+
+	// 客户端发送请求, 使用cookie传输
+	GetWithCsrfToken(r *http.Request) (sessionKey, sessionValue string, err error)
 }
 
 func (s *session) sessionP() {}
@@ -170,6 +177,36 @@ func (s *session) GetWithSid(r *http.Request) (sessionKey, sessionValue string, 
 	cookie := r.Header.Get(s.cookieName)
 
 	sessionKey, _ = url.QueryUnescape(cookie)
+	if len(sessionKey) != 48 {
+		return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
+	}
+	sessionValue = s.store.Get(fmt.Sprintf("%s::%s", s.prefix, sessionKey))
+	return
+}
+
+// 自动生成session的值, 36位长度
+// 同时把session写入缓存中请求头X-CSRF-TOKEN中
+// 如果没有设置缓存的值, 以cookie名称补充, 表示为未登陆用户
+func (s *session) SetWithCsrfToken(w http.ResponseWriter, cookieValue, internalValue string) {
+	if cookieValue == "" {
+		cookieValue = GenSessionKey()
+	}
+	if internalValue == "" {
+		internalValue = s.cookieName
+	}
+	s.store.Set(fmt.Sprintf("%s::%s", s.prefix, cookieValue), internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
+	w.Header().Set("X-CSRF-TOKEN", cookieValue)
+}
+
+// 通过Authorization获取session
+func (s *session) GetWithCsrfToken(r *http.Request) (sessionKey, sessionValue string, err error) {
+	token := r.Header.Get("Authorization")
+	auth, _ := url.QueryUnescape(token)
+	auths := strings.Split(auth, " ")
+	sessionKey = auths[0]
+	if len(auth) == 2 {
+		sessionKey = auths[1]
+	}
 	if len(sessionKey) != 48 {
 		return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
 	}

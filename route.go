@@ -34,6 +34,7 @@ func wrapHandlers(handlers ...HandlerFunc) []gin.HandlerFunc {
 type RouterGroup interface {
 	Group(api, apiName string, handlers ...HandlerFunc) RouterGroup
 	IRoutes
+	RouterSource
 }
 
 var _ IRoutes = (*router)(nil)
@@ -43,16 +44,16 @@ type IRoutes interface {
 	// Any(string, ...HandlerFunc)
 	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
 	//参数为如果为空, 该方法不会在 api 文档中进行注册
-	GET(relativePath, pathName string, params interface{}, handlers ...HandlerFunc)
+	GET(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources)
 	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
 	//参数为如果为空, 该方法不会在 api 文档中进行注册
-	PUT(relativePath, pathName string, params interface{}, handlers ...HandlerFunc)
+	PUT(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources)
 	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
 	//参数为如果为空, 该方法不会在 api 文档中进行注册
-	POST(relativePath, pathName string, params interface{}, handlers ...HandlerFunc)
+	POST(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources)
 	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
 	//参数为如果为空, 该方法不会在 api 文档中进行注册
-	DELETE(relativePath, pathName string, params interface{}, handlers ...HandlerFunc)
+	DELETE(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources)
 	// TODO: 以后根据业务进行扩展
 	// PATCH(string, ...HandlerFunc)
 	// OPTIONS(string, ...HandlerFunc)
@@ -60,11 +61,13 @@ type IRoutes interface {
 }
 
 type router struct {
-	group *gin.RouterGroup
+	group  *gin.RouterGroup
+	source *Sources
 }
 
 var (
 	routers = make(map[string]*router, 100)
+	lock    = &sync.Mutex{}
 )
 
 // 获取路由
@@ -80,7 +83,6 @@ func getRouter(relativePath string) (rout *router) {
 // 同时对路由设置进行加锁
 // 设置路由时, 同时完成对资源表的写入
 func setRouter(relativePath, pathName string, r *router) {
-	lock := &sync.Mutex{}
 	lock.Lock()
 	defer lock.Unlock()
 
@@ -90,8 +92,13 @@ func setRouter(relativePath, pathName string, r *router) {
 	if pathName == "" {
 		pathName = relativePath
 	}
-	sources = append(sources, r.genSources(relativePath, pathName, "", nil))
+	source := r.genSources(relativePath, pathName, "", nil)
 
+	// 默认路由组为菜单, 均需要授权才能访问
+	source.SourceType = SOURCE_TYPE_MENU
+	sourcesMap[source.SourceCode] = source
+	sources = append(sources, source)
+	r.source = source
 	routers[relativePath] = r
 
 }
@@ -122,37 +129,34 @@ func (r *router) Group(relativePath, pathName string, handlers ...HandlerFunc) R
 // Get请求方式封装
 //
 // 参数如果为空, 该方法不会被记录在资源表中
-func (r *router) GET(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) {
+func (r *router) GET(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources) {
 	// handlers = append([]HandlerFunc{r.validParams()}, handlers...)
-	r.operation("GET", relativePath, pathName, params)
 	r.group.GET(relativePath, wrapHandlers(handlers...)...)
+	return r.operation("GET", relativePath, pathName, params)
 }
 
 // Post请求方式封装
 //
 // 参数如果为空, 该方法不会被记录在资源表中
-func (r *router) POST(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) {
-	// handlers = append([]HandlerFunc{r.validParams()}, handlers...)
-	r.operation("POST", relativePath, pathName, params)
+func (r *router) POST(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources) {
 	r.group.POST(relativePath, wrapHandlers(handlers...)...)
+	return r.operation("POST", relativePath, pathName, params)
 }
 
 // Delete请求方式封装
 //
 // 参数如果为空, 该方法不会被记录在资源表中
-func (r *router) DELETE(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) {
-	// handlers = append([]HandlerFunc{r.validParams()}, handlers...)
-	r.operation("DELETE", relativePath, pathName, params)
+func (r *router) DELETE(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources) {
 	r.group.DELETE(relativePath, wrapHandlers(handlers...)...)
+	return r.operation("DELETE", relativePath, pathName, params)
 }
 
 // Put请求方式封装
 //
 // 参数如果为空, 该方法不会被记录在资源表中
-func (r *router) PUT(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) {
-	// handlers = append([]HandlerFunc{r.validParams()}, handlers...)
-	r.operation("PUT", relativePath, pathName, params)
+func (r *router) PUT(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources) {
 	r.group.PUT(relativePath, wrapHandlers(handlers...)...)
+	return r.operation("PUT", relativePath, pathName, params)
 }
 
 func (r *router) PATCH(relativePath string, handlers ...HandlerFunc) {
@@ -168,16 +172,20 @@ func (r *router) HEAD(relativePath string, handlers ...HandlerFunc) {
 }
 
 // 处理参数生成逻辑
-func (r *router) operation(method, relativePath, pathName string, params interface{}) {
+func (r *router) operation(method, relativePath, pathName string, params interface{}) (source *Sources) {
 	if relativePath == "" {
 		relativePath = "/"
 	}
-	if params != nil {
-		rt := reflect.TypeOf(params)
-		// 每个接口的参数存放在变量中便于后面查询使用
-		requestParams[fmt.Sprintf("%s:%s/%s", method, r.group.BasePath(), relativePath)] = rt
-		sources = append(sources, r.genSources(relativePath, pathName, method, rt))
-	}
+
+	rt := reflect.TypeOf(params)
+	// 每个接口的参数存放在变量中便于后面查询使用
+	requestParams[fmt.Sprintf("%s:%s/%s", method, r.group.BasePath(), relativePath)] = rt
+	source = r.genSources(relativePath, pathName, method, rt)
+	// 默认资源均需要授权才能访问
+	source.SourceType = SOURCE_TYPE_PERMISSION
+	sources = append(sources, source)
+	sourcesMap[source.SourceCode] = source
+	return
 }
 
 // 用于生成系统资源结构体
@@ -289,4 +297,24 @@ func genSourcesParams(rt reflect.Type) (params string, contentType string) {
 		params = string(paramsB)
 	}
 	return
+}
+
+// 用于设置某些路由不必写入资源库
+func (r *router) NotWithSource() RouterGroup {
+	delete(sourcesMap, r.source.SourceCode)
+	r.source = nil
+	return r
+}
+
+// 用于设置某些资源受权限控制
+func (r *router) WithPermission(t int8) RouterGroup {
+	// delete(sourcesMap, r.source.SourceCode)
+	r.source.SourceType = t
+	return r
+}
+
+// 用于设置路由和资源的关系
+type RouterSource interface {
+	NotWithSource() RouterGroup
+	WithPermission(t int8) RouterGroup
 }

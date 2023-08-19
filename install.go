@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2023-08-15 23:08:07
+ * @LastEditTime: 2023-08-19 08:16:15
  * @Description: 系统配置相关操作
  */
 package core
@@ -74,7 +74,7 @@ func (c *core) install() (err error) {
 		return errorx.Wrap(err, "DB服务初始化失败")
 	}
 
-	// 加入
+	// 把资源map转成list, 初始化写入资源列表
 	s := &Sources{}
 	c.rdb.Register(s, func() error { return c.rdb.DB().Table(s.TableName()).CreateInBatches(sources, len(sources)).Error })
 
