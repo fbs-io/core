@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-08-15 23:25:13
+ * @LastEditTime: 2023-08-20 12:17:13
  * @Description: 关系数据库配置
  */
 package rdb
@@ -54,6 +54,7 @@ type Store interface {
 	SetConfig(fs ...dsn.DsnFunc) error
 	Register(t Tabler, fs ...RegisterFunc)
 	BuildQueryWithParams(params reflect.Value) *gorm.DB
+	BuildQuery(cb *Condition) (tx *gorm.DB)
 }
 
 var _ Store = (*rdbStore)(nil)

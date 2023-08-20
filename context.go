@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2023-07-20 07:06:48
+ * @LastEditTime: 2023-08-19 18:10:36
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -20,7 +20,8 @@ import (
 )
 
 type context struct {
-	ctx *gin.Context
+	ctx  *gin.Context
+	core Core
 }
 
 const (
@@ -122,6 +123,8 @@ type Context interface {
 
 	// 获取已经构建好查询参数的tx
 	TX() *gorm.DB
+
+	Core() Core
 }
 
 var _ Context = (*context)(nil)
@@ -134,9 +137,10 @@ var ctxPool = &sync.Pool{
 }
 
 // 新建一个上下文
-func newCtx(ctx *gin.Context) Context {
+func newCtx(c Core, ctx *gin.Context) Context {
 	ct := ctxPool.Get().(*context)
 	ct.ctx = ctx
+	ct.core = c
 	return ct
 }
 
@@ -299,14 +303,14 @@ func (c *context) Next() {
 	c.ctx.Next()
 }
 
-// func (c *context) SetTx(tx *gorm.DB) {
-// 	c.tx = tx
-// }
-
 func (c *context) TX() *gorm.DB {
 	txi, ok := c.ctx.Get(CTX_TX)
 	if !ok {
 		return nil
 	}
 	return txi.(*gorm.DB)
+}
+
+func (c *context) Core() Core {
+	return c.core
 }

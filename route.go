@@ -16,11 +16,11 @@ import (
 
 type HandlerFunc func(Context)
 
-func wrapHandlers(handlers ...HandlerFunc) []gin.HandlerFunc {
+func wrapHandlers(c Core, handlers ...HandlerFunc) []gin.HandlerFunc {
 	funcs := make([]gin.HandlerFunc, len(handlers))
 	for i, h := range handlers {
-		funcs[i] = func(c *gin.Context) {
-			ctx := newCtx(c)
+		funcs[i] = func(ginCtx *gin.Context) {
+			ctx := newCtx(c, ginCtx)
 			defer setFreeCtx(ctx)
 			h(ctx)
 		}
@@ -63,6 +63,7 @@ type IRoutes interface {
 type router struct {
 	group  *gin.RouterGroup
 	source *Sources
+	core   Core
 }
 
 var (
@@ -95,8 +96,9 @@ func setRouter(relativePath, pathName string, r *router) {
 	source := r.genSources(relativePath, pathName, "", nil)
 
 	// 默认路由组为菜单, 均需要授权才能访问
-	source.SourceType = SOURCE_TYPE_MENU
-	sourcesMap[source.SourceCode] = source
+	source.Type = SOURCE_TYPE_MENU
+	source.IsRouter = SOURCE_ROUTER_IS
+	sourcesMap[source.Code] = source
 	sources = append(sources, source)
 	r.source = source
 	routers[relativePath] = r
@@ -107,7 +109,10 @@ func setRouter(relativePath, pathName string, r *router) {
 func (c *core) Group(relativePath string, handlers ...HandlerFunc) RouterGroup {
 	r := getRouter(relativePath)
 	if r == nil {
-		r = &router{group: c.Engine().Group(relativePath, wrapHandlers(handlers...)...)}
+		r = &router{
+			group: c.Engine().Group(relativePath, wrapHandlers(c, handlers...)...),
+			core:  c,
+		}
 	}
 	setRouter(relativePath, relativePath, r)
 	return r
@@ -115,7 +120,7 @@ func (c *core) Group(relativePath string, handlers ...HandlerFunc) RouterGroup {
 
 // 对gin路由分组的封装
 func (r *router) Group(relativePath, pathName string, handlers ...HandlerFunc) RouterGroup {
-	group := r.group.Group(relativePath, wrapHandlers(handlers...)...)
+	group := r.group.Group(relativePath, wrapHandlers(r.core, handlers...)...)
 
 	rout := getRouter(relativePath)
 	if rout == nil {
@@ -131,7 +136,7 @@ func (r *router) Group(relativePath, pathName string, handlers ...HandlerFunc) R
 // 参数如果为空, 该方法不会被记录在资源表中
 func (r *router) GET(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources) {
 	// handlers = append([]HandlerFunc{r.validParams()}, handlers...)
-	r.group.GET(relativePath, wrapHandlers(handlers...)...)
+	r.group.GET(relativePath, wrapHandlers(r.core, handlers...)...)
 	return r.operation("GET", relativePath, pathName, params)
 }
 
@@ -139,7 +144,7 @@ func (r *router) GET(relativePath, pathName string, params interface{}, handlers
 //
 // 参数如果为空, 该方法不会被记录在资源表中
 func (r *router) POST(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources) {
-	r.group.POST(relativePath, wrapHandlers(handlers...)...)
+	r.group.POST(relativePath, wrapHandlers(r.core, handlers...)...)
 	return r.operation("POST", relativePath, pathName, params)
 }
 
@@ -147,7 +152,7 @@ func (r *router) POST(relativePath, pathName string, params interface{}, handler
 //
 // 参数如果为空, 该方法不会被记录在资源表中
 func (r *router) DELETE(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources) {
-	r.group.DELETE(relativePath, wrapHandlers(handlers...)...)
+	r.group.DELETE(relativePath, wrapHandlers(r.core, handlers...)...)
 	return r.operation("DELETE", relativePath, pathName, params)
 }
 
@@ -155,20 +160,20 @@ func (r *router) DELETE(relativePath, pathName string, params interface{}, handl
 //
 // 参数如果为空, 该方法不会被记录在资源表中
 func (r *router) PUT(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Sources) {
-	r.group.PUT(relativePath, wrapHandlers(handlers...)...)
+	r.group.PUT(relativePath, wrapHandlers(r.core, handlers...)...)
 	return r.operation("PUT", relativePath, pathName, params)
 }
 
 func (r *router) PATCH(relativePath string, handlers ...HandlerFunc) {
-	r.group.PATCH(relativePath, wrapHandlers(handlers...)...)
+	r.group.PATCH(relativePath, wrapHandlers(r.core, handlers...)...)
 }
 
 func (r *router) OPTIONS(relativePath string, handlers ...HandlerFunc) {
-	r.group.OPTIONS(relativePath, wrapHandlers(handlers...)...)
+	r.group.OPTIONS(relativePath, wrapHandlers(r.core, handlers...)...)
 }
 
 func (r *router) HEAD(relativePath string, handlers ...HandlerFunc) {
-	r.group.HEAD(relativePath, wrapHandlers(handlers...)...)
+	r.group.HEAD(relativePath, wrapHandlers(r.core, handlers...)...)
 }
 
 // 处理参数生成逻辑
@@ -182,9 +187,9 @@ func (r *router) operation(method, relativePath, pathName string, params interfa
 	requestParams[fmt.Sprintf("%s:%s/%s", method, r.group.BasePath(), relativePath)] = rt
 	source = r.genSources(relativePath, pathName, method, rt)
 	// 默认资源均需要授权才能访问
-	source.SourceType = SOURCE_TYPE_PERMISSION
+	source.Type = SOURCE_TYPE_PERMISSION
 	sources = append(sources, source)
-	sourcesMap[source.SourceCode] = source
+	sourcesMap[source.Code] = source
 	return
 }
 
@@ -198,19 +203,30 @@ func (r *router) genSources(relativePath, name, method string, params reflect.Ty
 	basePaths := strings.Split(r.group.BasePath(), "/")[1:]
 	method = strings.ToLower(method)
 	s := &Sources{}
+	// s.Meta = make(map[string]interface{}, 10)
 	fullpath := basePaths
+	var metaType = "menu"
 	if method != "" {
 		basePaths = append(basePaths, relativePath)
 		fullpath = append([]string{method}, basePaths...)
-		s.ApiMethod = method
-		s.ApiName = name
-		s.ApiParams, s.ApiAcceptType = genSourcesParams(params)
+		s.Method = method
+		s.Params, s.AcceptType = genSourcesParams(params)
+		metaType = "button"
 	}
-	s.SourceName = name
-	s.SourceCode = strings.Join(fullpath, ":")
-	s.SourcePCode = strings.Join(basePaths[:len(basePaths)-1], ":")
-	s.SourceDeep = int8(len(basePaths))
-	s.SourcePath = path.Join(basePaths...)
+	s.Name = relativePath
+	s.Desc = name
+	s.Code = strings.Join(fullpath, ":")
+	s.PCode = strings.Join(basePaths[:len(basePaths)-1], ":")
+	s.Level = int8(len(basePaths))
+	s.Api = path.Join(basePaths...)
+
+	s.Path = fmt.Sprintf("/%s", relativePath)
+	s.Component = relativePath
+	s.Meta = map[string]interface{}{
+		"title": name,
+		"icon":  "el-icon-menu",
+		"type":  metaType,
+	}
 
 	return s
 }
@@ -301,7 +317,7 @@ func genSourcesParams(rt reflect.Type) (params string, contentType string) {
 
 // 用于设置某些路由不必写入资源库
 func (r *router) NotWithSource() RouterGroup {
-	delete(sourcesMap, r.source.SourceCode)
+	delete(sourcesMap, r.source.Code)
 	r.source = nil
 	return r
 }
@@ -309,7 +325,13 @@ func (r *router) NotWithSource() RouterGroup {
 // 用于设置某些资源受权限控制
 func (r *router) WithPermission(t int8) RouterGroup {
 	// delete(sourcesMap, r.source.SourceCode)
-	r.source.SourceType = t
+	r.source.WithPermission(t)
+	return r
+}
+
+func (r *router) WithRouter(t int8) RouterGroup {
+	// delete(sourcesMap, r.source.SourceCode)
+	r.source.WithRouter(t)
 	return r
 }
 
@@ -317,4 +339,5 @@ func (r *router) WithPermission(t int8) RouterGroup {
 type RouterSource interface {
 	NotWithSource() RouterGroup
 	WithPermission(t int8) RouterGroup
+	WithRouter(t int8) RouterGroup
 }

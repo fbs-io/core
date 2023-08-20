@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2023-08-17 07:01:25
+ * @LastEditTime: 2023-08-20 15:41:28
  * @Description: 常用的中间件
  */
 package core
@@ -69,7 +69,6 @@ func CorsMiddleware(c Core) gin.HandlerFunc {
 // 日志中间件
 func LogMiddleware(c Core) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-
 		startTime := time.Now()
 		ctx.Next()
 		if strings.Contains(ctx.Request.RequestURI, "/static/") {
@@ -85,12 +84,13 @@ func LogMiddleware(c Core) gin.HandlerFunc {
 	}
 }
 
-var allowResource = make(map[string]bool, 100)
+var (
+	allowResource = make(map[string]bool, 1000) // 资源访问例外
+)
 
 // 请使用 method:path 的方式定义资源
 // 比如 POST:/ajax/login
 func AddAllowResource(resoures ...string) {
-
 	for _, resoure := range resoures {
 		allowResource[resoure] = true
 	}
@@ -117,40 +117,24 @@ func SignatureMiddleware(c Core, singular string) gin.HandlerFunc {
 		switch singular {
 		case SINGULAR_TYPE_COOKIE:
 			sessionKey, sessiionValue, err = c.Session().GetWithCookie(ctx.Request)
-			if err != nil {
-				ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
-				ctx.Abort()
-				return
-			}
 			c.Session().SetWithCookie(ctx.Writer, sessionKey, sessiionValue)
 		case SINGULAR_TYPE_SID:
 			sessionKey, sessiionValue, err = c.Session().GetWithSid(ctx.Request)
-			if err != nil {
-				ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
-				ctx.Abort()
-				return
-			}
 			c.Session().SetWithSid(ctx.Writer, sessionKey, sessiionValue)
 
 		case SINGULAR_TYPE_CSRF_TOKEN:
 			sessionKey, sessiionValue, err = c.Session().GetWithCsrfToken(ctx.Request)
-			if err != nil {
-				ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
-				ctx.Abort()
-				return
-			}
 			c.Session().SetWithCsrfToken(ctx.Writer, sessionKey, sessiionValue)
 
 		default:
-			sessionKey, sessiionValue, err := c.Session().GetWithToken(ctx.Request)
-			if err != nil {
-				ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
-				ctx.Abort()
-				return
-			}
+			sessionKey, sessiionValue, err = c.Session().GetWithToken(ctx.Request)
 			// 更新session过期时间
 			c.Session().SetWithToken(sessionKey, sessiionValue)
-
+		}
+		if err != nil {
+			ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
+			ctx.Abort()
+			return
 		}
 		// 用户鉴权成功后, 把用户信息写入上下文用于数据的查询,记录等
 		ctx.Set("auth", sessiionValue)
