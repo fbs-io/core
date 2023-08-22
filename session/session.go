@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-06 19:21:05
  * @LastEditors: reel
- * @LastEditTime: 2023-08-17 06:50:17
+ * @LastEditTime: 2023-08-22 06:56:04
  * @Description: session 模块
  */
 package session
@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fbs-io/core/pkg/errorx"
 	"github.com/fbs-io/core/store/cache"
 	"github.com/fbs-io/core/store/dsn"
 	"github.com/google/uuid"
@@ -70,9 +71,7 @@ func New(funs ...optFunc) Session {
 		opt.store.Start()
 
 	}
-	if opt.prefix == "" {
-		opt.prefix = fmt.Sprintf("%d", time.Now().UnixNano())
-	}
+	opt.prefix = fmt.Sprintf("%s::%d", opt.prefix, time.Now().UnixNano())
 	s := &session{
 		lifeTime:   opt.lifeTime,
 		cookieName: opt.cookieName,
@@ -93,7 +92,7 @@ func (s *session) SetWithCookie(w http.ResponseWriter, cookieValue, internalValu
 	if internalValue == "" {
 		internalValue = s.cookieName
 	}
-	s.store.Set(fmt.Sprintf("%s::%s", s.prefix, cookieValue), internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
+	s.store.Set(s.GenStoreKey(cookieValue), internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
 	cookie := &http.Cookie{
 		Name:     s.cookieName,
 		Value:    url.QueryEscape(cookieValue),
@@ -117,7 +116,10 @@ func (s *session) GetWithCookie(r *http.Request) (sessionKey, sessionValue strin
 	if len(sessionKey) != 48 {
 		return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
 	}
-	sessionValue = s.store.Get(fmt.Sprintf("%s::%s", s.prefix, sessionKey))
+	sessionValue = s.store.Get(s.GenStoreKey(sessionKey))
+	if sessionValue == "" || sessionValue == s.cookieName {
+		return "", "", errorx.New("账户未登陆或登陆信息已生效，请重新登陆")
+	}
 	return
 }
 
@@ -136,7 +138,7 @@ func (s *session) GetSessionWithCookie(r *http.Request, w http.ResponseWriter) (
 
 // 设置token
 func (s *session) SetWithToken(sessionKey, sessionValue string) {
-	s.store.Set(fmt.Sprintf("%s::%s", s.prefix, sessionKey), sessionValue, cache.SetTTL(time.Duration(s.lifeTime)))
+	s.store.Set(s.GenStoreKey(sessionKey), sessionValue, cache.SetTTL(time.Duration(s.lifeTime)))
 }
 
 // 获取token
@@ -146,7 +148,10 @@ func (s *session) GetWithToken(r *http.Request) (sessionKey, sessionValue string
 	if len(sessionKey) != 48 {
 		return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
 	}
-	sessionValue = s.store.Get(fmt.Sprintf("%s::%s", s.prefix, sessionKey))
+	sessionValue = s.store.Get(s.GenStoreKey(sessionKey))
+	if sessionValue == "" || sessionValue == s.cookieName {
+		return "", "", errorx.New("账户未登陆或登陆信息已生效，请重新登陆")
+	}
 	return
 }
 
@@ -168,7 +173,7 @@ func (s *session) SetWithSid(w http.ResponseWriter, cookieValue, internalValue s
 	if internalValue == "" {
 		internalValue = s.cookieName
 	}
-	s.store.Set(fmt.Sprintf("%s::%s", s.prefix, cookieValue), internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
+	s.store.Set(s.GenStoreKey(cookieValue), internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
 	w.Header().Set("SID", cookieValue)
 }
 
@@ -180,7 +185,10 @@ func (s *session) GetWithSid(r *http.Request) (sessionKey, sessionValue string, 
 	if len(sessionKey) != 48 {
 		return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
 	}
-	sessionValue = s.store.Get(fmt.Sprintf("%s::%s", s.prefix, sessionKey))
+	sessionValue = s.store.Get(s.GenStoreKey(sessionKey))
+	if sessionValue == "" || sessionValue == s.cookieName {
+		return "", "", errorx.New("账户未登陆或登陆信息已生效，请重新登陆")
+	}
 	return
 }
 
@@ -194,7 +202,7 @@ func (s *session) SetWithCsrfToken(w http.ResponseWriter, cookieValue, internalV
 	if internalValue == "" {
 		internalValue = s.cookieName
 	}
-	s.store.Set(fmt.Sprintf("%s::%s", s.prefix, cookieValue), internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
+	s.store.Set(s.GenStoreKey(cookieValue), internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
 	w.Header().Set("X-CSRF-TOKEN", cookieValue)
 }
 
@@ -208,8 +216,15 @@ func (s *session) GetWithCsrfToken(r *http.Request) (sessionKey, sessionValue st
 		sessionKey = auths[1]
 	}
 	if len(sessionKey) != 48 {
-		return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
+		return "", "", errorx.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
 	}
-	sessionValue = s.store.Get(fmt.Sprintf("%s::%s", s.prefix, sessionKey))
+	sessionValue = s.store.Get(s.GenStoreKey(sessionKey))
+	if sessionValue == "" || sessionValue == s.cookieName {
+		return "", "", errorx.New("账户未登陆或登陆信息已生效，请重新登陆")
+	}
 	return
+}
+
+func (s *session) GenStoreKey(sessionKey string) string {
+	return fmt.Sprintf("%s::%s", s.prefix, sessionKey)
 }

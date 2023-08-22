@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2023-07-30 22:23:40
+ * @LastEditTime: 2023-08-22 06:14:42
  * @Description: 管理核心组件的启动和运行
  */
 package core
@@ -110,7 +110,7 @@ func New(funcs ...FuncCores) (Core, error) {
 		config:  &config.Config{},
 		limiter: rate.NewLimiter(rate.Limit(opt.limitNumber), opt.limitSize),
 	}
-	c.session = session.New(session.Store(c.cache))
+	c.session = session.New(session.Store(c.cache), session.Prefix("app::session"))
 	// 配置中心和其他服务分开启动和关闭
 
 	msc.Init(c.msc.Engine(), c.config, c.cache, c.cron)

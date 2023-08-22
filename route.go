@@ -93,7 +93,7 @@ func setRouter(relativePath, pathName string, r *router) {
 	if pathName == "" {
 		pathName = relativePath
 	}
-	source := r.genSources(relativePath, pathName, "", nil)
+	source := r.genSources(relativePath, pathName, "")
 
 	// 默认路由组为菜单, 均需要授权才能访问
 	source.Type = SOURCE_TYPE_MENU
@@ -181,11 +181,18 @@ func (r *router) operation(method, relativePath, pathName string, params interfa
 	if relativePath == "" {
 		relativePath = "/"
 	}
+	var (
+		paramStr, acceptType string
+	)
+	if params != nil {
+		rt := reflect.TypeOf(params)
+		requestParams[fmt.Sprintf("%s:%s/%s", method, r.group.BasePath(), relativePath)] = rt
+		paramStr, acceptType = genSourcesParams(rt)
 
-	rt := reflect.TypeOf(params)
+	}
 	// 每个接口的参数存放在变量中便于后面查询使用
-	requestParams[fmt.Sprintf("%s:%s/%s", method, r.group.BasePath(), relativePath)] = rt
-	source = r.genSources(relativePath, pathName, method, rt)
+	source = r.genSources(relativePath, pathName, method)
+	source.Params, source.AcceptType = paramStr, acceptType
 	// 默认资源均需要授权才能访问
 	source.Type = SOURCE_TYPE_PERMISSION
 	sources = append(sources, source)
@@ -198,7 +205,7 @@ func (r *router) operation(method, relativePath, pathName string, params interfa
 // 用于API文档和前端菜单
 //
 // 同时可用于权限及自动生成gorm查询参数
-func (r *router) genSources(relativePath, name, method string, params reflect.Type) *Sources {
+func (r *router) genSources(relativePath, name, method string) *Sources {
 
 	basePaths := strings.Split(r.group.BasePath(), "/")[1:]
 	method = strings.ToLower(method)
@@ -210,7 +217,7 @@ func (r *router) genSources(relativePath, name, method string, params reflect.Ty
 		basePaths = append(basePaths, relativePath)
 		fullpath = append([]string{method}, basePaths...)
 		s.Method = method
-		s.Params, s.AcceptType = genSourcesParams(params)
+		// s.Params, s.AcceptType = genSourcesParams(params)
 		metaType = "button"
 	}
 	s.Name = relativePath

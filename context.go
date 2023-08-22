@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2023-08-19 18:10:36
+ * @LastEditTime: 2023-08-21 22:22:04
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -125,6 +125,9 @@ type Context interface {
 	TX() *gorm.DB
 
 	Core() Core
+
+	// 获取用户
+	Auth() string
 }
 
 var _ Context = (*context)(nil)
@@ -313,4 +316,12 @@ func (c *context) TX() *gorm.DB {
 
 func (c *context) Core() Core {
 	return c.core
+}
+
+func (c *context) Auth() (auth string) {
+	authI, ok := c.ctx.Get("auth")
+	if !ok {
+		return
+	}
+	return authI.(string)
 }

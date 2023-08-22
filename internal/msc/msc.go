@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-17 22:49:53
  * @LastEditors: reel
- * @LastEditTime: 2023-06-23 22:00:05
+ * @LastEditTime: 2023-08-22 06:14:31
  * @Description: 后台管理中心
  */
 package msc
@@ -34,9 +34,12 @@ type handler struct {
 
 func Init(engine *gin.Engine, conf *config.Config, cache cache.Store, cron cron.Cron) {
 	m := &handler{
-		config:    conf,
-		cache:     cache,
-		session:   session.New(session.Store(cache)),
+		config: conf,
+		cache:  cache,
+		session: session.New(
+			session.Store(cache),
+			session.Prefix("msc::session"),
+		),
 		cron:      cron,
 		procinfos: make([]map[string]interface{}, 0, 20),
 		sysinfo:   make(map[string]interface{}, 0),

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2023-08-20 15:41:28
+ * @LastEditTime: 2023-08-22 06:18:01
  * @Description: 常用的中间件
  */
 package core
@@ -174,6 +174,10 @@ func ParamsMiddleware(c Core) gin.HandlerFunc {
 		// ctx.CtxSet()
 		ctx.Set(CTX_PARAMS, params)
 		tx := c.RDB().BuildQueryWithParams(rv)
+		auth, ok := ctx.Get("auth")
+		if ok {
+			tx.Set("auth", fmt.Sprintf("%v", auth))
+		}
 		ctx.Set(CTX_TX, tx)
 	}
 }
