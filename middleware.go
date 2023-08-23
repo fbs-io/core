@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2023-08-22 06:18:01
+ * @LastEditTime: 2023-08-23 20:35:05
  * @Description: 常用的中间件
  */
 package core
@@ -96,7 +96,7 @@ func AddAllowResource(resoures ...string) {
 	}
 }
 
-func resource(ctx *gin.Context) string {
+func requestKey(ctx *gin.Context) string {
 	return fmt.Sprintf("%s:%s", ctx.Request.Method, ctx.FullPath())
 }
 
@@ -105,7 +105,7 @@ func resource(ctx *gin.Context) string {
 // Singular: 默认 token 模式， 同时可以选择cookie，sid, csrftoken方式
 func SignatureMiddleware(c Core, singular string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		if allowResource[resource(ctx)] {
+		if allowResource[requestKey(ctx)] {
 			ctx.Next()
 			return
 		}
@@ -150,8 +150,7 @@ func SignatureMiddleware(c Core, singular string) gin.HandlerFunc {
 // 同时根据约束, 自动完成参数校验
 func ParamsMiddleware(c Core) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		res := resource(ctx)
-		rt := requestParams[res]
+		rt := requestParams[requestKey(ctx)]
 		if rt == nil {
 			ctx.Next()
 			return

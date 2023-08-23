@@ -2,13 +2,14 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2023-08-20 23:08:42
+ * @LastEditTime: 2023-08-23 22:23:50
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/fbs-io/core/store/rdb"
 	"gorm.io/gorm"
@@ -81,7 +82,13 @@ func (s *Sources) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// 用于外部设置souces
+// 用于外部设置souces, 请通过 core.SOURCE_TYPE_* 进行设置
+//
+// 0: 受限资源, 无法访问, 该资源下在子集, 自动去除菜单和组件的前缀; 1:不受限, api和菜单都可访问
+//
+// 2: 受限菜单, 可通过权限设置访问; 3: 不受限菜单, 登陆用户均可访问
+//
+// 4: 受限api, 可通过权限设置访问; 5: 不受限api, 登陆用户均可访问
 func (s *Sources) WithPermission(t int8) *Sources {
 	s.Type = t
 	switch t {
@@ -96,6 +103,8 @@ func (s *Sources) WithPermission(t int8) *Sources {
 		s.IsRouter = SOURCE_ROUTER_NAN
 	case SOURCE_TYPE_LIMITED:
 		s.IsRouter = SOURCE_ROUTER_NAN
+		s.Path = ""
+		s.Component = ""
 	case SOURCE_TYPE_UNLIMITED:
 		s.IsRouter = SOURCE_ROUTER_IS
 	}
@@ -118,5 +127,24 @@ func (s *Sources) SetDescription(des string) *Sources {
 //
 // 主要用于权限校验
 func (s *Sources) GenRequestKey() string {
-	return fmt.Sprintf("%s:%s", s.Method, s.Api)
+	return fmt.Sprintf("%s:%s", strings.ToUpper(s.Method), s.Api)
+}
+
+// 设置允许通过的登陆签名校验的接口
+//
+// 默认所有接口需要签名校验
+//
+// 通过该方法可以设置例外接口, 如登陆接口
+func (s *Sources) WithAllowSignature() *Sources {
+	AddAllowResource(s.GenRequestKey())
+	return s
+}
+
+// 去除前端菜单路由前缀
+//
+// 例如api接口转为前端路由: /ajax/user/list => /user/list
+func (s *Sources) WithMenuNotPrefix(prefix string) *Sources {
+	s.Path = strings.Replace(s.Path, "/"+prefix, "", -1)
+	s.Component = strings.Replace(s.Component, prefix+"/", "", -1)
+	return s
 }

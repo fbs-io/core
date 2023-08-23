@@ -35,6 +35,7 @@ type RouterGroup interface {
 	Group(api, apiName string, handlers ...HandlerFunc) RouterGroup
 	IRoutes
 	RouterSource
+	Core() Core
 }
 
 var _ IRoutes = (*router)(nil)
@@ -124,7 +125,10 @@ func (r *router) Group(relativePath, pathName string, handlers ...HandlerFunc) R
 
 	rout := getRouter(relativePath)
 	if rout == nil {
-		rout = &router{group: group}
+		rout = &router{
+			group: group,
+			core:  r.core,
+		}
 	}
 	setRouter(relativePath, pathName, rout)
 
@@ -206,7 +210,6 @@ func (r *router) operation(method, relativePath, pathName string, params interfa
 //
 // 同时可用于权限及自动生成gorm查询参数
 func (r *router) genSources(relativePath, name, method string) *Sources {
-
 	basePaths := strings.Split(r.group.BasePath(), "/")[1:]
 	method = strings.ToLower(method)
 	s := &Sources{}
@@ -217,7 +220,6 @@ func (r *router) genSources(relativePath, name, method string) *Sources {
 		basePaths = append(basePaths, relativePath)
 		fullpath = append([]string{method}, basePaths...)
 		s.Method = method
-		// s.Params, s.AcceptType = genSourcesParams(params)
 		metaType = "button"
 	}
 	s.Name = relativePath
@@ -225,10 +227,20 @@ func (r *router) genSources(relativePath, name, method string) *Sources {
 	s.Code = strings.Join(fullpath, ":")
 	s.PCode = strings.Join(basePaths[:len(basePaths)-1], ":")
 	s.Level = int8(len(basePaths))
-	s.Api = path.Join(basePaths...)
+	s.Api = fmt.Sprintf("/%s", path.Join(basePaths...))
+	ps := sourcesMap[s.PCode]
 
 	s.Path = fmt.Sprintf("/%s", relativePath)
 	s.Component = relativePath
+	if ps != nil {
+		if ps.Path != "" {
+			s.Path = fmt.Sprintf("%s/%s", ps.Path, relativePath)
+		}
+		if ps.Component != "" {
+			s.Component = fmt.Sprintf("%s/%s", ps.Component, relativePath)
+
+		}
+	}
 	s.Meta = map[string]interface{}{
 		"title": name,
 		"icon":  "el-icon-menu",
@@ -329,22 +341,62 @@ func (r *router) NotWithSource() RouterGroup {
 	return r
 }
 
-// 用于设置某些资源受权限控制
+// 用于设置设置模块/api权限
+//
+// 默认所有菜单,api都需要权限设置
+//
+// 对于通用模块如用户个人设置等信息, 可以设置为权限例外, 可以灵活的在初始化阶段完成权限配置
 func (r *router) WithPermission(t int8) RouterGroup {
-	// delete(sourcesMap, r.source.SourceCode)
 	r.source.WithPermission(t)
 	return r
 }
 
+// 去除前端菜单路由前缀,
+//
+// path: /ajax/user/list => /user/list
+// Component : ajax/user/list => user/list
+func (r *router) WithMenuNotPrefix(prefix string) RouterGroup {
+	r.source.WithMenuNotPrefix(prefix)
+	return r
+}
+
+// 设置为前端路由或非路由
+//
+// 模块部分默认为前端路由(菜单), 默认值 SOURCE_ROUTER_IS = 1, api默认非路由, 为按钮权限, 默认值 SOURCE_ROUTER_NAN=0
+//
+// 通过该方法可以灵活的配置接口/模块的显示规则
 func (r *router) WithRouter(t int8) RouterGroup {
-	// delete(sourcesMap, r.source.SourceCode)
 	r.source.WithRouter(t)
 	return r
 }
 
 // 用于设置路由和资源的关系
 type RouterSource interface {
+
+	// 用于设置某些路由不必写入资源库
 	NotWithSource() RouterGroup
+
+	// 用于设置设置模块/api权限
+	//
+	// 默认所有菜单,api都需要权限设置
+	//
+	// 对于通用模块如用户个人设置等信息, 可以设置为权限例外, 可以灵活的在初始化阶段完成权限配置
 	WithPermission(t int8) RouterGroup
+
+	// 设置为前端路由或非路由
+	//
+	// 模块部分默认为前端路由(菜单), 默认值 SOURCE_ROUTER_IS = 1, api默认非路由, 为按钮权限, 默认值 SOURCE_ROUTER_NAN=0
+	//
+	// 通过该方法可以灵活的配置接口/模块的显示规则
 	WithRouter(t int8) RouterGroup
+
+	// 去除前端菜单路由前缀,
+	//
+	// 例如api接口转为前端路由: /ajax/user/list => /user/list
+	WithMenuNotPrefix(prefix string) RouterGroup
+}
+
+// 返回Core, 用于在应用模块快速使用Core资源
+func (r *router) Core() Core {
+	return r.core
 }
