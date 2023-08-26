@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2023-08-21 22:22:04
+ * @LastEditTime: 2023-08-26 20:36:18
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/fbs-io/core/pkg/errno"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"gorm.io/gorm"
@@ -259,6 +260,11 @@ func (c *context) HTML(name string, obj interface{}) {
 }
 
 func (c *context) JSON(data interface{}) {
+	en, ok := data.(errno.Errno)
+	if ok {
+		c.ctx.JSON(en.HTTPCode(), en.ToMap())
+		return
+	}
 	c.ctx.JSON(200, data)
 }
 

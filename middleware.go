@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2023-08-23 20:35:05
+ * @LastEditTime: 2023-08-26 19:46:43
  * @Description: 常用的中间件
  */
 package core
@@ -163,10 +163,12 @@ func ParamsMiddleware(c Core) gin.HandlerFunc {
 			err = ctx.ShouldBindQuery(&params)
 		case jsonContent:
 			err = ctx.ShouldBindJSON(&params)
+		default:
+			err = ctx.ShouldBindQuery(params)
 		}
+		fmt.Println(params)
 		if err != nil {
 			ctx.JSON(200, errno.ERRNO_PARAMS_BIND.ToMapWithError(errorx.Wrap(err, "校验参数发生错误")))
-			// ctx.JSON(errno.ERRNO_PARAMS_BIND.ToMapWithError(errorx.Wrap(err, "校验参数发生错误")))
 			ctx.Abort()
 			return
 		}

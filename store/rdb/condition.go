@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 06:55:41
  * @LastEditors: reel
- * @LastEditTime: 2023-07-19 21:53:44
+ * @LastEditTime: 2023-08-26 19:47:17
  * @Description: 根据条件结构体, 自动构建查询语句, 并返回gorm.DB, 用于扩展
  */
 package rdb
@@ -61,6 +61,11 @@ func (rdb *rdbStore) BuildQueryByID(cb *Condition) (tx *gorm.DB) {
 	if cb.PageSize > 1000 {
 		cb.PageSize = 1000
 	}
+	// 限定最大获取输了
+	cb.PageNumber = cb.PageNumber - 1
+	if cb.PageNumber < 0 {
+		cb.PageNumber = 0
+	}
 	// 子查询用于快速分页查询
 	sub = sub.Table(cb.TableName).Select("id as subid")
 	sub = sub.Where("status = ? ", 1).Order(strings.Join(cb.Orders, ", "))
@@ -88,7 +93,11 @@ func (rdb *rdbStore) BuildQuery(cb *Condition) (tx *gorm.DB) {
 	if cb.PageSize > 1000 {
 		cb.PageSize = 1000
 	}
-
+	// 限定最大获取输了
+	cb.PageNumber = cb.PageNumber - 1
+	if cb.PageNumber < 0 {
+		cb.PageNumber = 0
+	}
 	tx = tx.Limit(cb.PageSize).Offset(cb.PageNumber * cb.PageSize)
 
 	tx = tx.Table(cb.TableName)
@@ -249,6 +258,11 @@ func (db *rdbStore) BuildQueryWithParams(params reflect.Value) *gorm.DB {
 	}
 	if pageSize > 1000 {
 		pageSize = 1000
+	}
+	// 限定最大获取输了
+	pageNumber = pageNumber - 1
+	if pageNumber < 0 {
+		pageNumber = 0
 	}
 	tx = tx.Limit(pageSize).Offset(pageNumber * pageSize)
 	return tx
