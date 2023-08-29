@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2023-08-26 19:46:43
+ * @LastEditTime: 2023-08-28 05:54:53
  * @Description: 常用的中间件
  */
 package core
@@ -160,26 +160,19 @@ func ParamsMiddleware(c Core) gin.HandlerFunc {
 		var err error
 		switch ctx.ContentType() {
 		case formContent:
-			err = ctx.ShouldBindQuery(&params)
+			err = ctx.ShouldBindQuery(params)
 		case jsonContent:
 			err = ctx.ShouldBindJSON(&params)
 		default:
 			err = ctx.ShouldBindQuery(params)
 		}
-		fmt.Println(params)
 		if err != nil {
 			ctx.JSON(200, errno.ERRNO_PARAMS_BIND.ToMapWithError(errorx.Wrap(err, "校验参数发生错误")))
 			ctx.Abort()
 			return
 		}
-		// ctx.CtxSet()
 		ctx.Set(CTX_PARAMS, params)
-		tx := c.RDB().BuildQueryWithParams(rv)
-		auth, ok := ctx.Get("auth")
-		if ok {
-			tx.Set("auth", fmt.Sprintf("%v", auth))
-		}
-		ctx.Set(CTX_TX, tx)
+		ctx.Set(CTX_REFLECT_VALUE, rv)
 	}
 }
 

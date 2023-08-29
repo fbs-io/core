@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 22:19:24
  * @LastEditors: reel
- * @LastEditTime: 2023-08-26 21:57:15
+ * @LastEditTime: 2023-08-27 12:57:01
  * @Description: 定义常用的错误代码
  */
 package errno
@@ -26,11 +26,12 @@ var (
 	// ERRNO_ACTIVe            Errno = New(200, 50006, "验证 license 错误")
 
 	// 数据库错误相关
-	ERRNO_RDB        Errno = New(200, 50100, "数据库通用错误")
-	ERRNO_RDB_QUERY  Errno = New(200, 50101, "数据查询错误") //数据查询错误
-	ERRNO_RDB_DELETE Errno = New(200, 50102, "数据删除错误") //数据删除错误
-	ERRNO_RDB_CREATE Errno = New(200, 50103, "数据创建错误") //数据创建错误
-	ERRNO_RDB_UPDATE Errno = New(200, 50104, "数据更新错误") //数据更新错误
+	ERRNO_RDB                Errno = New(200, 50100, "数据库通用错误")
+	ERRNO_RDB_QUERY          Errno = New(200, 50101, "数据查询错误") //数据查询错误
+	ERRNO_RDB_DELETE         Errno = New(200, 50102, "数据删除错误") //数据删除错误
+	ERRNO_RDB_CREATE         Errno = New(200, 50103, "数据创建错误") //数据创建错误
+	ERRNO_RDB_UPDATE         Errno = New(200, 50104, "数据更新错误") //数据更新错误
+	ERRNO_RDB_DUPLICATED_KEY       = New(200, 50105, "重复主键错误") //数据重复错误
 	// 缓存错误相关
 	ERRNO_CACHE       Errno = New(200, 50201, "缓存错误")
 	ERRNO_CACHE_QUERY Errno = New(200, 50201, "缓存查询错误")

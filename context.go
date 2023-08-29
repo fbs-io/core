@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2023-08-26 20:36:18
+ * @LastEditTime: 2023-08-28 20:50:19
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/fbs-io/core/pkg/errno"
+	"github.com/fbs-io/core/store/rdb"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 	"gorm.io/gorm"
@@ -26,8 +27,15 @@ type context struct {
 }
 
 const (
-	CTX_PARAMS = "ctx_params"
-	CTX_TX     = "ctx_tx"
+	CTX_PARAMS        = "ctx_params"
+	CTX_TX            = "ctx_tx"
+	CTX_REFLECT_VALUE = "reflect_value"
+
+	// 通过ctx生成查询tx的方式
+
+	// 适用于表中有id的查询, 通过子查询优化分页性能
+	TX_QRY_MODE_SUBID = "subid"
+	TX_QRY_DELETE     = true
 )
 
 var (
@@ -118,17 +126,16 @@ type Context interface {
 
 	Ctx() *gin.Context
 
-	// 数据库相关
-	// 获取已经构建好查询参数的tx
-	// SetTx(tx *gorm.DB)
-
-	// 获取已经构建好查询参数的tx
-	TX() *gorm.DB
+	// 返回通过参数构建好查询参数参数的gorm.DB
+	TX(optFunc ...TxOptsFunc) *gorm.DB
 
 	Core() Core
 
 	// 获取用户
 	Auth() string
+
+	// 生成新的db查询
+	NewTX(optFunc ...TxOptsFunc) *gorm.DB
 }
 
 var _ Context = (*context)(nil)
@@ -312,12 +319,68 @@ func (c *context) Next() {
 	c.ctx.Next()
 }
 
-func (c *context) TX() *gorm.DB {
-	txi, ok := c.ctx.Get(CTX_TX)
+type txOpts struct {
+	mode      string
+	qryDelete bool
+	tableName string
+}
+
+type TxOptsFunc func(*txOpts)
+
+// 设置查询方式
+//
+// TX_QRY_MODE_SUBID 表示带id的子查询, 注意: 使用TX_QRY_MODE_SUBID, 必须配合使用 SetTxSubTable 设置表名
+func SetTxMode(mode string) TxOptsFunc {
+	return func(txo *txOpts) {
+		txo.mode = mode
+	}
+}
+
+// 设置子查询表明
+func SetTxSubTable(table string) TxOptsFunc {
+	return func(txo *txOpts) {
+		txo.tableName = table
+	}
+}
+
+func QryDelete() TxOptsFunc {
+	return func(txo *txOpts) {
+		txo.qryDelete = true
+	}
+}
+
+// 通过传入参数设置查询方式
+func (c *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
+	txopt := &txOpts{
+		mode: "",
+	}
+
+	for _, optfunc := range optFunc {
+		optfunc(txopt)
+	}
+
+	rvi, ok := c.ctx.Get(CTX_REFLECT_VALUE)
 	if !ok {
 		return nil
 	}
-	return txi.(*gorm.DB)
+	var tx *gorm.DB
+	cb := rdb.GenConditionWithParams(rvi.(reflect.Value))
+	cb.QryDelete = txopt.qryDelete
+	if txopt.tableName != "" {
+		cb.TableName = txopt.tableName
+	}
+	switch txopt.mode {
+	case TX_QRY_MODE_SUBID:
+		tx = c.core.RDB().BuildQueryWihtSubQryID(cb)
+	default:
+		tx = c.Core().RDB().BuildQuery(cb)
+	}
+	auth, ok := c.ctx.Get("auth")
+	if ok {
+		tx.Set("auth", fmt.Sprintf("%v", auth))
+	}
+
+	return tx
 }
 
 func (c *context) Core() Core {
@@ -330,4 +393,8 @@ func (c *context) Auth() (auth string) {
 		return
 	}
 	return authI.(string)
+}
+
+func (c *context) NewTX(optFunc ...TxOptsFunc) *gorm.DB {
+	return c.Core().RDB().DB()
 }

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-08-20 12:17:13
+ * @LastEditTime: 2023-08-28 06:46:26
  * @Description: 关系数据库配置
  */
 package rdb
@@ -52,9 +52,21 @@ type Store interface {
 
 	// DB 相关
 	SetConfig(fs ...dsn.DsnFunc) error
+
+	// 注册表结构, 同时允许注册时写入函数, 如初始化创建部分数据等
 	Register(t Tabler, fs ...RegisterFunc)
-	BuildQueryWithParams(params reflect.Value) *gorm.DB
+
+	// 根据条件结构体生成查询tx
 	BuildQuery(cb *Condition) (tx *gorm.DB)
+
+	// 通过参数反射值构建普通查询tx用于应用端使用
+	// 大多数查询通过使用该方法即可
+	BuildQueryWithParams(params reflect.Value) *gorm.DB
+
+	// 通过参数反射值构建普通查询tx用于应用端使用
+	//
+	// 此方法适用于表中有ID(主键)的字段, 优化了翻页查询性能
+	BuildQueryWihtSubQryID(cb *Condition) (tx *gorm.DB)
 }
 
 var _ Store = (*rdbStore)(nil)
@@ -230,3 +242,7 @@ func (r *rdbStore) CreateInBatches(ts interface{}) (err error) {
 }
 
 type RegisterFunc func() error
+
+func IsUniqueError(err error) (ok bool) {
+	return strings.Contains(err.Error(), "UNIQUE constraint failed:")
+}
