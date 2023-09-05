@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2023-08-23 22:23:50
+ * @LastEditTime: 2023-09-04 22:42:06
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -146,5 +146,11 @@ func (s *Sources) WithAllowSignature() *Sources {
 func (s *Sources) WithMenuNotPrefix(prefix string) *Sources {
 	s.Path = strings.Replace(s.Path, "/"+prefix, "", -1)
 	s.Component = strings.Replace(s.Component, prefix+"/", "", -1)
+	return s
+}
+
+// 设置路由隐藏
+func (s *Sources) WithHidden() *Sources {
+	s.Meta["hidden"] = true
 	return s
 }

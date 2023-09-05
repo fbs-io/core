@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2023-08-28 20:50:19
+ * @LastEditTime: 2023-09-05 06:21:09
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -29,6 +29,7 @@ type context struct {
 const (
 	CTX_PARAMS        = "ctx_params"
 	CTX_TX            = "ctx_tx"
+	CTX_AUTH          = "ctx_auth"
 	CTX_REFLECT_VALUE = "reflect_value"
 
 	// 通过ctx生成查询tx的方式
@@ -388,7 +389,7 @@ func (c *context) Core() Core {
 }
 
 func (c *context) Auth() (auth string) {
-	authI, ok := c.ctx.Get("auth")
+	authI, ok := c.ctx.Get(CTX_AUTH)
 	if !ok {
 		return
 	}

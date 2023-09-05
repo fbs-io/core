@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2023-08-28 05:54:53
+ * @LastEditTime: 2023-09-05 19:24:04
  * @Description: 常用的中间件
  */
 package core
@@ -96,8 +96,12 @@ func AddAllowResource(resoures ...string) {
 	}
 }
 
+func GetAllowResource(ctx *gin.Context) bool {
+	return allowResource[requestKey(ctx)]
+}
+
 func requestKey(ctx *gin.Context) string {
-	return fmt.Sprintf("%s:%s", ctx.Request.Method, ctx.FullPath())
+	return fmt.Sprintf("%s:%s", ctx.Request.Method, strings.Split(ctx.Request.RequestURI, "?")[0])
 }
 
 // 校验签名中间件
@@ -106,6 +110,10 @@ func requestKey(ctx *gin.Context) string {
 func SignatureMiddleware(c Core, singular string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		if allowResource[requestKey(ctx)] {
+			ctx.Next()
+			return
+		}
+		if strings.Contains(ctx.Request.RequestURI, "/static/") {
 			ctx.Next()
 			return
 		}
@@ -137,7 +145,7 @@ func SignatureMiddleware(c Core, singular string) gin.HandlerFunc {
 			return
 		}
 		// 用户鉴权成功后, 把用户信息写入上下文用于数据的查询,记录等
-		ctx.Set("auth", sessiionValue)
+		ctx.Set(CTX_AUTH, sessiionValue)
 		ctx.Next()
 
 	}

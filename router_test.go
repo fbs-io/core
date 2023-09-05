@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-19 23:18:19
  * @LastEditors: reel
- * @LastEditTime: 2023-08-19 06:11:17
+ * @LastEditTime: 2023-09-05 19:26:43
  * @Description: 测试路由相关方法
  */
 
@@ -32,7 +32,7 @@ func TestRouter(t *testing.T) {
 	rout := &router{
 		group: gin.New().Group("api"),
 	}
-	source := rout.genSources("api", "api", "", nil)
+	source := rout.genSources("api", "api", "")
 	fmt.Println(source)
 
 	// 模拟使用时生成资源表测试

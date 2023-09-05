@@ -394,6 +394,15 @@ type RouterSource interface {
 	//
 	// 例如api接口转为前端路由: /ajax/user/list => /user/list
 	WithMenuNotPrefix(prefix string) RouterGroup
+
+	// 设置路由隐藏
+	WithHidden() RouterGroup
+}
+
+// 设置路由隐藏
+func (r *router) WithHidden() RouterGroup {
+	r.source.WithHidden()
+	return r
 }
 
 // 返回Core, 用于在应用模块快速使用Core资源
