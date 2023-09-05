@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2023-09-04 22:42:06
+ * @LastEditTime: 2023-09-05 23:23:28
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -136,7 +136,7 @@ func (s *Sources) GenRequestKey() string {
 //
 // 通过该方法可以设置例外接口, 如登陆接口
 func (s *Sources) WithAllowSignature() *Sources {
-	AddAllowResource(s.GenRequestKey())
+	AddAllowSource(s.GenRequestKey())
 	return s
 }
 

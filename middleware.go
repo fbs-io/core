@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2023-09-05 19:24:04
+ * @LastEditTime: 2023-09-05 23:30:16
  * @Description: 常用的中间件
  */
 package core
@@ -28,12 +28,20 @@ const (
 	SINGULAR_TYPE_CSRF_TOKEN = "CSRF-TOKEN"
 )
 
+var (
+	STATIC_PATH_PREFIX = "/static/"
+)
+
+func SetStaticPathPrefix(prefix string) {
+	STATIC_PATH_PREFIX = prefix
+}
+
 // 跨域处理中间件
 func CorsMiddleware(c Core) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		method := ctx.Request.Method
 		origin := ctx.Request.Header.Get("Origin") //请求头部
-		if origin != "" {
+		if origin != "" && !strings.Contains(ctx.FullPath(), STATIC_PATH_PREFIX) {
 			//接收客户端发送的origin （重要！）
 			ctx.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			ctx.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -71,7 +79,7 @@ func LogMiddleware(c Core) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		startTime := time.Now()
 		ctx.Next()
-		if strings.Contains(ctx.Request.RequestURI, "/static/") {
+		if strings.Contains(ctx.Request.RequestURI, STATIC_PATH_PREFIX) {
 			return
 		}
 		endTime := time.Now()
@@ -85,23 +93,23 @@ func LogMiddleware(c Core) gin.HandlerFunc {
 }
 
 var (
-	allowResource = make(map[string]bool, 1000) // 资源访问例外
+	allowSource = make(map[string]bool, 1000) // 资源访问例外
 )
 
 // 请使用 method:path 的方式定义资源
 // 比如 POST:/ajax/login
-func AddAllowResource(resoures ...string) {
+func AddAllowSource(resoures ...string) {
 	for _, resoure := range resoures {
-		allowResource[resoure] = true
+		allowSource[resoure] = true
 	}
 }
 
-func GetAllowResource(ctx *gin.Context) bool {
-	return allowResource[requestKey(ctx)]
+func GetAllowSource(ctx *gin.Context) bool {
+	return allowSource[requestKey(ctx)]
 }
 
 func requestKey(ctx *gin.Context) string {
-	return fmt.Sprintf("%s:%s", ctx.Request.Method, strings.Split(ctx.Request.RequestURI, "?")[0])
+	return fmt.Sprintf("%s:%s", ctx.Request.Method, ctx.FullPath())
 }
 
 // 校验签名中间件
@@ -109,11 +117,11 @@ func requestKey(ctx *gin.Context) string {
 // Singular: 默认 token 模式， 同时可以选择cookie，sid, csrftoken方式
 func SignatureMiddleware(c Core, singular string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		if allowResource[requestKey(ctx)] {
+		if allowSource[requestKey(ctx)] {
 			ctx.Next()
 			return
 		}
-		if strings.Contains(ctx.Request.RequestURI, "/static/") {
+		if strings.Contains(ctx.Request.RequestURI, STATIC_PATH_PREFIX) {
 			ctx.Next()
 			return
 		}
