@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-17 22:49:53
  * @LastEditors: reel
- * @LastEditTime: 2023-08-22 06:14:31
+ * @LastEditTime: 2023-09-12 06:40:17
  * @Description: 后台管理中心
  */
 package msc
@@ -13,8 +13,8 @@ import (
 
 	"github.com/fbs-io/core/cron"
 	"github.com/fbs-io/core/internal/config"
-	"github.com/fbs-io/core/internal/msc/views"
 	"github.com/fbs-io/core/logx"
+	"github.com/fbs-io/core/mscui"
 	"github.com/fbs-io/core/service"
 	"github.com/fbs-io/core/session"
 	"github.com/fbs-io/core/store/cache"
@@ -45,7 +45,6 @@ func Init(engine *gin.Engine, conf *config.Config, cache cache.Store, cron cron.
 		sysinfo:   make(map[string]interface{}, 0),
 		srvStatus: make([]map[string]interface{}, 0),
 	}
-
 	m.cron.AddJob(
 		func() {
 			info := m.getProcessInfo()
@@ -70,6 +69,7 @@ func Init(engine *gin.Engine, conf *config.Config, cache cache.Store, cron cron.
 			logx.Sys.Info("系统信息", logx.Details(m.getSysInfo()))
 			m.srvStatus = service.Status()
 			logx.Sys.Info("服务状态", logx.F("details", m.srvStatus))
+
 		},
 		"当前系统资源使用率及服务状态查询",
 		2,
@@ -81,18 +81,15 @@ func Init(engine *gin.Engine, conf *config.Config, cache cache.Store, cron cron.
 	engine.Use(m.signature())
 
 	// 加载静态资源
-	engine.GET("/install/*filepath", func(ctx *gin.Context) {
-		staticSrv := http.FileServer(http.FS(views.Install))
-		staticSrv.ServeHTTP(ctx.Writer, ctx.Request)
-	})
-	// 加载静态资源
 	engine.GET("/mscui/*filepath", func(ctx *gin.Context) {
-		staticSrv := http.FileServer(http.FS(views.Mscui))
+		staticSrv := http.FileServer(http.FS(mscui.Mscui))
 		staticSrv.ServeHTTP(ctx.Writer, ctx.Request)
 	})
 
-	engine.GET("/", m.index())
-
+	engine.GET("/", func(ctx *gin.Context) {
+		ctx.Header("Content-Type", "text/html;charset=utf-8")
+		ctx.String(200, string(mscui.Index))
+	})
 	// 区分后台管理中心和业务路由
 	mscui := engine.Group("msc")
 	ajax := mscui.Group("ajax")

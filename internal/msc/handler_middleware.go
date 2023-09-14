@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-28 18:06:12
  * @LastEditors: reel
- * @LastEditTime: 2023-08-01 23:41:27
+ * @LastEditTime: 2023-09-14 07:19:53
  * @Description: 中间件
  */
 package msc
@@ -26,29 +26,30 @@ const (
 
 // 跨域处理中间件
 func (m *handler) cors() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		method := c.Request.Method
-		origin := c.Request.Header.Get("Origin") //请求头部
+	return func(ctx *gin.Context) {
+		method := ctx.Request.Method
+		origin := ctx.Request.Header.Get("Origin") //请求头部
 		if origin != "" {
 			//接收客户端发送的origin （重要！）
-			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			ctx.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			ctx.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 			//服务器支持的所有跨域请求的方法
-			c.Header("Access-Control-Allow-Origin", "*")
-			c.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE,UPDATE")
+			ctx.Header("Access-Control-Allow-Origin", origin)
+			ctx.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE,UPDATE")
 			//允许跨域设置可以返回其他子段，可以自定义字段
-			c.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, Content-Length, X-CSRF-Token, Token,session")
+			ctx.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, Content-Length, X-CSRF-TOKEN, Token,session")
 			// 允许浏览器（客户端）可以解析的头部 （重要）
-			c.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers")
+			ctx.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, X-CSRF-TOKEN, SID")
 			//设置缓存时间
-			c.Header("Access-Control-Max-Age", "172800")
+			ctx.Header("Access-Control-Max-Age", "172800")
 			//允许客户端传递校验信息比如 cookie (重要)
-			c.Header("Access-Control-Allow-Credentials", "true")
-			c.Set("Content-type", "application/json")
+			ctx.Header("Access-Control-Allow-Credentials", "true")
+			// ctx.Header("Content-type", ctx.ContentType())
 		}
 
 		//允许类型校验
 		if method == "OPTIONS" {
-			c.JSON(http.StatusOK, gin.H{"code": 0})
+			ctx.JSON(http.StatusOK, gin.H{"code": 0})
 		}
 
 		defer func() {
@@ -57,13 +58,9 @@ func (m *handler) cors() gin.HandlerFunc {
 			}
 		}()
 
-		c.Next()
+		ctx.Next()
 	}
 }
-
-// var notWriteLogPath = map[string]string{
-//     "/static/": "/static/",
-// }
 
 // 日志中间件
 func (m *handler) log() gin.HandlerFunc {
@@ -71,7 +68,7 @@ func (m *handler) log() gin.HandlerFunc {
 
 		startTime := time.Now()
 		ctx.Next()
-		if strings.Contains(ctx.Request.RequestURI, "/static/") {
+		if strings.Contains(ctx.Request.RequestURI, "/mscui/") {
 			return
 		}
 		endTime := time.Now()
@@ -87,15 +84,27 @@ func (m *handler) log() gin.HandlerFunc {
 }
 
 var allowPath = map[string]bool{
-	"/ajax/login": true,
-	// "/":             true,
-	"/ajax/install": true,
+	"/msc/ajax/login":   true,
+	"/msc/ajax/install": true,
+	"/":                 true,
+	"/mscui":            true,
 }
+
+const (
+	initConfig = `const APP_CONFIG = { APP_NAME: "FBS Manager System Center",API_URL:  "", APP_INIT: true}`
+)
 
 // 校验签名
 // 如果没有登陆, 则会给一个默认的签名
 func (m *handler) signature() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		if ctx.Request.RequestURI == `/mscui/config.js` && !m.config.IsLoad {
+			ctx.Header("Content-Type", "application/javascript")
+			ctx.String(200, initConfig)
+			ctx.Abort()
+			return
+		}
+
 		if allowPath[ctx.FullPath()] {
 			ctx.Next()
 			return
@@ -104,11 +113,15 @@ func (m *handler) signature() gin.HandlerFunc {
 			ctx.Next()
 			return
 		}
+		if strings.Contains(ctx.Request.RequestURI, "/mscui/") {
+			ctx.Next()
+			return
+		}
+		sessionKey, sessiionValue, err := m.session.GetWithCsrfToken(ctx.Request)
+		m.session.SetWithCsrfToken(ctx.Writer, sessionKey, sessiionValue)
 
-		sessionKey, sessiionValue, err := m.session.GetWithToken(ctx.Request)
 		// 更新session过期时间
-		m.session.SetWithToken(sessionKey, sessiionValue)
-		if err != nil && sessiionValue == m.session.CookieName() {
+		if err != nil {
 			ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
 			ctx.Abort()
 			return

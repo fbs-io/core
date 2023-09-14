@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2023-08-22 06:14:42
+ * @LastEditTime: 2023-09-11 07:34:21
  * @Description: 管理核心组件的启动和运行
  */
 package core
@@ -10,6 +10,7 @@ package core
 import (
 	"fmt"
 	"runtime"
+	"time"
 
 	"github.com/fbs-io/core/cron"
 	"github.com/fbs-io/core/internal/config"
@@ -90,6 +91,9 @@ func New(funcs ...FuncCores) (Core, error) {
 	dms, err := mux.New(
 		mux.SetHost(env.Active().MscAddr()),
 		mux.SetName("MSC"),
+		mux.SetTimeout(180),
+		mux.SetMaxReadTime(180*time.Second),
+		mux.SetMaxWriteTIme(180*time.Second),
 	)
 	if err != nil {
 		return nil, errorx.Wrap(err, "初始化后台管理服务发生错误")
@@ -97,6 +101,9 @@ func New(funcs ...FuncCores) (Core, error) {
 	ams, err := mux.New(
 		mux.SetHost(":80"),
 		mux.SetName("AMS"),
+		mux.SetTimeout(180),
+		mux.SetMaxReadTime(180*time.Second),
+		mux.SetMaxWriteTIme(180*time.Second),
 	)
 	if err != nil {
 		return nil, errorx.Wrap(err, "初始化应用管理服务发生错误")
@@ -116,7 +123,7 @@ func New(funcs ...FuncCores) (Core, error) {
 	msc.Init(c.msc.Engine(), c.config, c.cache, c.cron)
 
 	if _, err := pem.GetPems(); err != nil {
-		c.msc.Engine().POST("/ajax/install", c.installHandler())
+		c.msc.Engine().POST("/msc/ajax/install", c.installHandler())
 	}
 	err = c.msc.Start()
 	if err != nil {

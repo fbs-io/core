@@ -397,6 +397,9 @@ type RouterSource interface {
 
 	// 设置路由隐藏
 	WithHidden() RouterGroup
+
+	// 设置前端Meta信息
+	WithMeta(key string, value interface{}) RouterGroup
 }
 
 // 设置路由隐藏
@@ -408,4 +411,10 @@ func (r *router) WithHidden() RouterGroup {
 // 返回Core, 用于在应用模块快速使用Core资源
 func (r *router) Core() Core {
 	return r.core
+}
+
+// 设置前端Meta信息
+func (r *router) WithMeta(key string, value interface{}) RouterGroup {
+	r.source.Meta[key] = value
+	return r
 }

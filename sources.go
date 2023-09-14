@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2023-09-05 23:23:28
+ * @LastEditTime: 2023-09-12 06:52:26
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -152,5 +152,11 @@ func (s *Sources) WithMenuNotPrefix(prefix string) *Sources {
 // 设置路由隐藏
 func (s *Sources) WithHidden() *Sources {
 	s.Meta["hidden"] = true
+	return s
+}
+
+// 设置前端Meta信息
+func (s *Sources) WithMeta(key string, value interface{}) *Sources {
+	s.Meta[key] = value
 	return s
 }

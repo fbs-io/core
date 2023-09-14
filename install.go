@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2023-08-19 08:16:15
+ * @LastEditTime: 2023-09-12 05:55:32
  * @Description: 系统配置相关操作
  */
 package core
@@ -93,31 +93,34 @@ func (c *core) install() (err error) {
 // 安装
 func (c *core) installHandler() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		var (
+			err  error
+			data []byte
+			str  string
+		)
 		defer func() {
 			e := recover()
 			if e != nil {
-				fmt.Printf("%v", e)
+				logx.Sys.Error("系统初始化发生错误", logx.F("err", fmt.Sprintf("%v", e)))
+				ctx.JSON(200, errno.ERRNO_SYSTEM.ToMapWithError(errorx.Errorf("%v", e)))
 			}
 		}()
 		if c.config.IsLoad {
 			ctx.JSON(200, errno.ERRNO_IS_INSTALL.ToMap())
 			return
 		}
-		err := ctx.ShouldBindJSON(&(c.config))
+		pem.RemovePem()
+		err = ctx.ShouldBindJSON(&(c.config))
 		if err != nil {
 			ctx.JSON(200, errno.ERRNO_PARAMS_BIND.ToMapWithError(err))
 			return
 		}
-		// if c.config.User == "" || c.config.Pwd == "" || c.config.Pwd2 == "" || c.config.Pwd != c.config.Pwd2 {
-		//     ctx.JSON(200, errno.ERRNO_PARAMS_INVALID.ToMapWithData("账户密码为空或密码不相等"))
-		// }
-		data, _ := json.Marshal(c.config)
+		data, _ = json.Marshal(c.config)
 		if err != nil {
 			ctx.JSON(200, errno.ERRNO_PARAMS_INVALID.ToMapWithError(err))
 			return
 		}
-
-		str, err := encrypt.InternalEncode(data)
+		str, err = encrypt.InternalEncode(data)
 		if err != nil {
 			ctx.JSON(200, errno.ERRNO_PARAMS_INVALID.ToMapWithError(err))
 			return
@@ -127,7 +130,8 @@ func (c *core) installHandler() gin.HandlerFunc {
 			ctx.JSON(200, errno.ERRNO_INIT.ToMapWithError(err))
 			return
 		}
-		if service.Start() != nil {
+		if err := service.Start(); err != nil {
+			c.config.IsLoad = false
 			ctx.JSON(200, errno.ERRNO_PARAMS_INVALID.ToMapWithError(err))
 			return
 		}
