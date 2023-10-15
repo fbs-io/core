@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 07:50:35
  * @LastEditors: reel
- * @LastEditTime: 2023-08-22 00:18:28
+ * @LastEditTime: 2023-09-25 21:33:48
  * @Description: 请填写简介
  */
 package cache
@@ -40,6 +40,8 @@ type Store interface {
 	Del(key string) error
 	Set(key, value string, funcs ...OptFunc) (err error)
 	SetConfig(funcs ...dsn.DsnFunc) (err error)
+	SetIndex(indexName, index string, fs ...func(a string, b string) bool) error
+	GetByIndex(indexName string, iterator func(key string, value string) bool) error
 }
 
 var _ Store = (*cacheStore)(nil)
@@ -161,4 +163,19 @@ func (c *cacheStore) SetConfig(dsnFuns ...dsn.DsnFunc) (err error) {
 	}
 	c.dsn = cacheDsn
 	return nil
+}
+
+// 设置索引
+func (c *cacheStore) SetIndex(indexName, index string, fs ...func(a string, b string) bool) error {
+	return c.db.CreateIndex(indexName, index, fs...)
+}
+
+// 通过索引查询
+//
+// 结果集放在iterator函数内实现, 如: func(k,v)bool
+func (c *cacheStore) GetByIndex(indexName string, iterator func(key string, value string) bool) error {
+	return c.db.View(func(tx *buntdb.Tx) error {
+		return tx.Ascend(indexName, iterator)
+	})
+
 }

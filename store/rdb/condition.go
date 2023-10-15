@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 06:55:41
  * @LastEditors: reel
- * @LastEditTime: 2023-08-30 06:45:12
+ * @LastEditTime: 2023-10-15 10:25:02
  * @Description: 根据条件结构体, 自动构建查询语句, 并返回gorm.DB, 用于扩展
  */
 package rdb
@@ -31,13 +31,15 @@ const (
 )
 
 type Condition struct {
-	PageSize   int
-	PageNumber int
-	Columns    string
-	TableName  string
-	Orders     string
-	Where      map[string]interface{}
-	QryDelete  bool
+	PageSize    int
+	PageNumber  int
+	Columns     string
+	TableName   string
+	Orders      string
+	Where       map[string]interface{}
+	QryDelete   bool
+	IsSharding  bool
+	ShardingKey string
 }
 
 func NewCondition() *Condition {
@@ -51,15 +53,13 @@ func NewCondition() *Condition {
 // 通过传入条件, 自动完成gorm的语句生成
 //
 // 此方法适用于表中有ID(主键)的字段, 优化了翻页查询性能
-func (rdb *rdbStore) BuildQueryWihtSubQryID(cb *Condition) (tx *gorm.DB) {
-	tx = rdb.db
-	sub := rdb.db
+func (store *rdbStore) BuildQueryWihtSubQryID(cb *Condition) (tx *gorm.DB) {
+	tx = store.db
+	sub := store.db
 	for k, v := range cb.Where {
 		sub = sub.Where(k, v)
 	}
-	if !cb.QryDelete {
-		sub = sub.Where("(deleted_at = 0 or deleted_at is null )")
-	}
+
 	// 限定最大获取输了
 	if cb.PageSize > 1000 {
 		cb.PageSize = 1000
@@ -87,14 +87,12 @@ func (rdb *rdbStore) BuildQueryWihtSubQryID(cb *Condition) (tx *gorm.DB) {
 // 通过传入条件, 自动完成gorm的语句生成
 //
 // 不适用于大表的翻页查询, 大表查询请优化表结构
-func (rdb *rdbStore) BuildQuery(cb *Condition) (tx *gorm.DB) {
-	tx = rdb.db
+func (store *rdbStore) BuildQuery(cb *Condition) (tx *gorm.DB) {
+	tx = store.db
 	for k, v := range cb.Where {
 		tx = tx.Where(k, v)
 	}
-	if !cb.QryDelete {
-		tx = tx.Where("(deleted_at = 0 or deleted_at is null )")
-	}
+
 	// 限定最大获取输了
 	if cb.PageSize > 1000 {
 		cb.PageSize = 1000
@@ -129,6 +127,10 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 	cb := NewCondition()
 	paramsType := params.Type().Elem()
 	for i := 0; i < params.Elem().NumField(); i++ {
+		// fmt.Println("+++++++++", paramsType.Field(i))
+		if paramsType.Field(i).Name == "ShardingModel" {
+			cb.IsSharding = true
+		}
 		if params.Elem().Field(i).IsZero() {
 			continue
 		}
@@ -175,17 +177,18 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 			case notin:
 				condition = "not in (?)"
 			case like:
-				condition = fmt.Sprintf("like '%%%v%%' ", value)
-				value = nil
+				condition = "like (?)"
+				value = fmt.Sprintf("%%%v%%", value)
 			case likeLeft:
-				condition = fmt.Sprintf("like '%%%v' ", value)
-				value = nil
+				condition = "like (?)"
+				value = fmt.Sprintf("%%%v", value)
 			case likeRight:
-				condition = fmt.Sprintf("like '%v%%' ", value)
-				value = nil
+				condition = "like (?)"
+				value = fmt.Sprintf("%v%%", value)
 			default:
 				condition = fmt.Sprintf("%s (?)", condition)
 			}
+
 			cb.Where[fmt.Sprintf(ckey, key, condition)] = value
 		}
 	}
@@ -199,8 +202,8 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 // 仅适用单表的简单where-and条件查询, 不适用于复杂关联查询
 //
 // 复杂业务查询须手动处理或构建查询视图
-func (rdb *rdbStore) BuildQueryWithParams(params reflect.Value) *gorm.DB {
+func (store *rdbStore) BuildQueryWithParams(params reflect.Value) *gorm.DB {
 	cb := GenConditionWithParams(params)
-	tx := rdb.BuildQuery(cb)
+	tx := store.BuildQuery(cb)
 	return tx
 }

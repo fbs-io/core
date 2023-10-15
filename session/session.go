@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-06 19:21:05
  * @LastEditors: reel
- * @LastEditTime: 2023-08-22 06:56:04
+ * @LastEditTime: 2023-10-06 22:36:47
  * @Description: session 模块
  */
 package session
@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fbs-io/core/pkg/env"
 	"github.com/fbs-io/core/pkg/errorx"
 	"github.com/fbs-io/core/store/cache"
 	"github.com/fbs-io/core/store/dsn"
@@ -71,7 +72,12 @@ func New(funs ...optFunc) Session {
 		opt.store.Start()
 
 	}
-	opt.prefix = fmt.Sprintf("%s::%d", opt.prefix, time.Now().UnixNano())
+	lifeTime := opt.lifeTime
+	opt.lifeTime = opt.lifeTime * 48 * 30
+	if env.Active().Value() != env.ENV_MODE_DEV {
+		opt.prefix = fmt.Sprintf("%s::%d", opt.prefix, time.Now().UnixNano())
+		opt.lifeTime = lifeTime
+	}
 	s := &session{
 		lifeTime:   opt.lifeTime,
 		cookieName: opt.cookieName,

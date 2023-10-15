@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2023-09-05 06:21:09
+ * @LastEditTime: 2023-10-14 22:05:10
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/fbs-io/core/pkg/consts"
 	"github.com/fbs-io/core/pkg/errno"
 	"github.com/fbs-io/core/store/rdb"
 	"github.com/gin-gonic/gin"
@@ -29,11 +30,11 @@ type context struct {
 const (
 	CTX_PARAMS        = "ctx_params"
 	CTX_TX            = "ctx_tx"
-	CTX_AUTH          = "ctx_auth"
+	CTX_AUTH          = consts.CTX_AUTH
 	CTX_REFLECT_VALUE = "reflect_value"
+	CTX_SHARDING_KEY  = consts.CTX_SHARDING_KEY
 
 	// 通过ctx生成查询tx的方式
-
 	// 适用于表中有id的查询, 通过子查询优化分页性能
 	TX_QRY_MODE_SUBID = "subid"
 	TX_QRY_DELETE     = true
@@ -364,7 +365,9 @@ func (c *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
 	if !ok {
 		return nil
 	}
-	var tx *gorm.DB
+	store := c.core.RDB()
+	tx := store.DB().Where("1 = 1")
+
 	cb := rdb.GenConditionWithParams(rvi.(reflect.Value))
 	cb.QryDelete = txopt.qryDelete
 	if txopt.tableName != "" {
@@ -372,13 +375,13 @@ func (c *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
 	}
 	switch txopt.mode {
 	case TX_QRY_MODE_SUBID:
-		tx = c.core.RDB().BuildQueryWihtSubQryID(cb)
+		tx.Set(rdb.TX_CONDITION_BUILD_KEY, cb)
+		tx.Set(rdb.TX_SUB_QUERY_COLUMN_KEY, "id")
 	default:
-		tx = c.Core().RDB().BuildQuery(cb)
+		tx = store.BuildQuery(cb)
 	}
-	auth, ok := c.ctx.Get("auth")
-	if ok {
-		tx.Set("auth", fmt.Sprintf("%v", auth))
+	for k, v := range c.ctx.Copy().Keys {
+		tx.Set(k, v)
 	}
 
 	return tx
