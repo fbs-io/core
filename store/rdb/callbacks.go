@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2023-10-15 22:09:03
+ * @LastEditTime: 2023-10-16 20:26:20
  * @Description: 回掉函数
  */
 package rdb
@@ -14,13 +14,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// TODO: 增加链路追踪
 func (store *rdbStore) registerCallbacks() {
 	store.db.Callback().Query().Before("*").Register("subQuery", rdb.subQuery)
 	store.db.Callback().Row().Before("*").Register("subQuery", rdb.subQuery)
 	store.db.Callback().Raw().Before("*").Register("subQuery", rdb.subQuery)
 	store.db.Callback().Create().Before("*").Register("creates", rdb.setCreatesCallback)
 	store.db.Callback().Update().Before("*").Register("updates", rdb.setUpdatesCallback)
-	// store.db.Callback().Delete().Before("*").Register("deletes", rdb.setDeleteCallback)
 }
 
 // 目前只要用于表内分区和多表分区模式
@@ -29,9 +29,10 @@ func (store *rdbStore) registerCallbacks() {
 //
 // TODO:增加多数据库模式完善中
 func (store *rdbStore) switchSharding(tx *gorm.DB) {
-
-	sk, ok := tx.Get(consts.CTX_SHARDING_KEY)
-	if !ok || sk.(string) == "" {
+	if tx.Statement == nil {
+		return
+	}
+	if tx.Statement.Schema == nil {
 		return
 	}
 	//TODO: 验证是否不传模型, 是否可以完成字段判断
@@ -39,6 +40,11 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 
 	// 如果没有sharding 分区字段, 不做处理
 	if tt == nil {
+		return
+	}
+
+	sk, ok := tx.Get(consts.CTX_SHARDING_KEY)
+	if !ok || sk.(string) == "" {
 		return
 	}
 

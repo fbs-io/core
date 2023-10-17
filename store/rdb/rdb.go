@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-10-15 10:36:01
+ * @LastEditTime: 2023-10-17 07:28:22
  * @Description: 关系数据库配置
  */
 package rdb
@@ -112,6 +112,9 @@ type Store interface {
 
 	// 添加启动前的前置执行程序
 	AddMigrateList(fs ...func() error)
+
+	//添加分区后缀, 同时会重置表分区,自动迁移新增表分区的结构
+	AddShardingSuffixs(suffixs string) (err error)
 }
 
 var _ Store = (*rdbStore)(nil)
@@ -218,7 +221,10 @@ func (store *rdbStore) Register(t Tabler, fs ...RegisterFunc) Store {
 	store.migrateList = append(store.migrateList, func() (err error) {
 		// 根据实际使用, 系统资源表将在最后被加载
 		store.statTab = t
-
+		err = store.AutoShardingTable(t.TableName())
+		if err != nil {
+			return
+		}
 		// 从命令行重置所有表或部分表
 		if strings.Contains(env.Active().DBInit(), t.TableName()) ||
 			env.Active().DBInit() == TABLE_INIT_ALL {
@@ -227,25 +233,10 @@ func (store *rdbStore) Register(t Tabler, fs ...RegisterFunc) Store {
 				if err != nil {
 					return
 				}
-
-				// 分区表在重置主表时也全部重置
-				if store.shardingModel == SHADING_MODEL_TABLE {
-					for _, table := range store.shardingTable[t.TableName()] {
-						store.db.Table(table).Migrator().DropTable(t)
-					}
-				}
-
 				err = store.db.AutoMigrate(t)
 				if err != nil {
 					return
 				}
-
-				if store.shardingModel == SHADING_MODEL_TABLE {
-					for _, table := range store.shardingTable[t.TableName()] {
-						store.db.Table(table).Migrator().AutoMigrate(t)
-					}
-				}
-
 				for _, f := range fs {
 					err = f()
 					if err != nil {
@@ -258,14 +249,10 @@ func (store *rdbStore) Register(t Tabler, fs ...RegisterFunc) Store {
 			if err != nil {
 				return
 			}
-
-			if store.shardingModel == SHADING_MODEL_TABLE {
-				for _, table := range store.shardingTable[t.TableName()] {
-					store.db.Table(table).Migrator().AutoMigrate(t)
-				}
-			}
 		}
+
 		return
+
 	})
 	return store
 }
@@ -319,53 +306,4 @@ type RegisterFunc func() error
 
 func IsUniqueError(err error) (ok bool) {
 	return strings.Contains(err.Error(), "UNIQUE constraint failed:")
-}
-
-// 设置分区模式
-//
-// SHADING_MODEL_NOT : 不分区, 默认值, 数据都在一张表中,
-//
-// SHADING_MODEL_TABLE: 按表分区, 根据分区字段值, 设置表后缀
-//
-// TODO:SHADING_MODEL_DB: 按库(schema)分区, 根据分区字段值, 设置不同的库名(schema)后缀
-//
-// 该模式适用于使用cores 上下文ctx.TX()方式生成的 gorm.DB, 且在上下文中传入了分区字段, 会自动构建查询条件, 配合 ShardingModel使用,可以自动写入分区字段
-//
-// 如果直接使用gorm.DB查询, 该设置并不会生效
-func (store *rdbStore) SetShardingModel(model int8, suffix []interface{}) {
-	store.shardingModel = model
-	// if store.shardingModel > SHADING_MODEL_NOT && len(suffix) == 0 {
-	// 	s("已设置分区模式, 但未设置分区后缀列表")
-	// }
-	store.shardingSuffixs = suffix
-	if suffix == nil {
-		store.shardingSuffixs = make([]interface{}, 0, 100)
-	}
-
-	store.db.Callback().Query().Before("*").Register("sharding", rdb.switchSharding)
-	store.db.Callback().Row().Before("*").Register("sharding", rdb.switchSharding)
-	store.db.Callback().Raw().Before("*").Register("sharding", rdb.switchSharding)
-	store.db.Callback().Create().Before("*").Register("sharding", rdb.switchSharding)
-	store.db.Callback().Update().Before("*").Register("sharding", rdb.switchSharding)
-	store.db.Callback().Delete().Before("*").Register("sharding", rdb.switchSharding)
-}
-
-func (store *rdbStore) ShardingModel() (model int8) {
-	return store.shardingModel
-}
-func (store *rdbStore) ShardingTable() map[string][]string {
-	return store.shardingTable
-}
-
-// SHADING_MODEL_TABLE(按表分区) 模式下, 自定义添加可用于分区的表
-func (store *rdbStore) AddShardingTable(table string) {
-	store.shardingTable[table] = make([]string, 0, 100)
-	for _, suffix := range store.shardingSuffixs {
-		store.shardingTable[table] = append(store.shardingTable[table], fmt.Sprintf("%s_%s", table, suffix))
-	}
-}
-
-// SHADING_MODEL_TABLE(按表分区) 模式下, 自定义添加可用于分区的表
-func (store *rdbStore) AddMigrateList(fs ...func() error) {
-	store.migrateList = append(store.migrateList, fs...)
 }

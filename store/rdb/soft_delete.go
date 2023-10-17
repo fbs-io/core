@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 20:25:56
  * @LastEditors: reel
- * @LastEditTime: 2023-10-15 22:02:13
+ * @LastEditTime: 2023-10-15 22:11:07
  * @Description: 定义删除的类型
  */
 package rdb
@@ -172,6 +172,8 @@ func (sd SoftDeleteDeleteClause) ModifyStatement(stmt *gorm.Statement) {
 				}
 			}
 		}
+
+		// 添加删除人
 		field := stmt.Schema.FieldsByDBName["deleted_by"]
 		if field != nil && field.OwnerSchema.String() == "github.com/fbs-io/core/store/rdb.Model" {
 			auth, _ := stmt.Settings.Load(consts.CTX_AUTH)
