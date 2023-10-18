@@ -20,7 +20,7 @@ func wrapHandlers(c Core, handlers ...HandlerFunc) []gin.HandlerFunc {
 	funcs := make([]gin.HandlerFunc, len(handlers))
 	for i, h := range handlers {
 		funcs[i] = func(ginCtx *gin.Context) {
-			ctx := newCtx(c, ginCtx)
+			ctx := NewCtx(c, ginCtx)
 			defer setFreeCtx(ctx)
 			h(ctx)
 		}
@@ -221,6 +221,7 @@ func (r *router) genSources(relativePath, name, method string) *Sources {
 		fullpath = append([]string{method}, basePaths...)
 		s.Method = method
 		metaType = "button"
+		s.IsRouter = SOURCE_ROUTER_NAN
 	}
 	s.Name = relativePath
 	s.Desc = name

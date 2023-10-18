@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2023-09-12 06:52:26
+ * @LastEditTime: 2023-10-17 22:39:15
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -106,7 +106,9 @@ func (s *Sources) WithPermission(t int8) *Sources {
 		s.Path = ""
 		s.Component = ""
 	case SOURCE_TYPE_UNLIMITED:
-		s.IsRouter = SOURCE_ROUTER_IS
+		if s.Method == "" {
+			s.IsRouter = SOURCE_ROUTER_IS
+		}
 	}
 	return s
 }

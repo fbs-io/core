@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-10-17 07:28:22
+ * @LastEditTime: 2023-10-19 06:36:46
  * @Description: 关系数据库配置
  */
 package rdb
@@ -50,14 +50,15 @@ const (
 )
 
 type rdbStore struct {
-	db              *gorm.DB
-	dial            gorm.Dialector
-	statTab         Tabler
-	tablers         map[string]Tabler
-	migrateList     []func() error
-	shardingTable   map[string][]string
-	shardingModel   int8
-	shardingSuffixs []interface{} //分区后缀
+	db               *gorm.DB
+	dial             gorm.Dialector
+	statTab          Tabler
+	tablers          map[string]Tabler
+	migrateList      []func() error
+	shardingTable    map[string][]string // 仅仅写入注册了分区表的表
+	shardingModel    int8
+	shardingSuffixs  []interface{}   //分区后缀
+	shardingAllTable map[string]bool // 模型注册时, 只要包含了分区字段的表, 都会写入到该map中, 用于回调函数判断是否增加分区字段
 }
 
 type Store interface {
@@ -120,11 +121,12 @@ type Store interface {
 var _ Store = (*rdbStore)(nil)
 
 var rdb = &rdbStore{
-	db:              &gorm.DB{},
-	tablers:         make(map[string]Tabler, 1000),
-	migrateList:     make([]func() error, 0, 100),
-	shardingTable:   make(map[string][]string, 100),
-	shardingSuffixs: make([]interface{}, 0, 100),
+	db:               &gorm.DB{},
+	tablers:          make(map[string]Tabler, 1000),
+	migrateList:      make([]func() error, 0, 100),
+	shardingTable:    make(map[string][]string, 100),
+	shardingSuffixs:  make([]interface{}, 0, 100),
+	shardingAllTable: make(map[string]bool, 100),
 }
 
 func New() (s Store) {
@@ -245,7 +247,16 @@ func (store *rdbStore) Register(t Tabler, fs ...RegisterFunc) Store {
 				}
 			}
 		} else {
-			err = store.db.AutoMigrate(t)
+			tx := store.db
+			err = tx.AutoMigrate(t)
+			rt := reflect.TypeOf(t).Elem()
+
+			rtModel, ok1 := rt.FieldByName("ShardingModel")
+			rtKey, ok2 := rt.FieldByName("ShadingKey")
+			// 通过多重判断, 确定模型中包含了分区字段
+			if ok1 && ok2 && rtModel.Name == "ShardingModel" && rtKey.Name == "ShadingKey" && strings.Contains(rtKey.Tag.Get("gorm"), "column:sk") {
+				store.shardingAllTable[t.TableName()] = true
+			}
 			if err != nil {
 				return
 			}

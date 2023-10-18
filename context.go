@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2023-10-14 22:05:10
+ * @LastEditTime: 2023-10-17 22:14:23
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -150,7 +150,7 @@ var ctxPool = &sync.Pool{
 }
 
 // 新建一个上下文
-func newCtx(c Core, ctx *gin.Context) Context {
+func NewCtx(c Core, ctx *gin.Context) Context {
 	ct := ctxPool.Get().(*context)
 	ct.ctx = ctx
 	ct.core = c
@@ -400,5 +400,9 @@ func (c *context) Auth() (auth string) {
 }
 
 func (c *context) NewTX(optFunc ...TxOptsFunc) *gorm.DB {
-	return c.Core().RDB().DB()
+	tx := c.Core().RDB().DB().Where("1=1")
+	for k, v := range c.ctx.Copy().Keys {
+		tx.Set(k, v)
+	}
+	return tx
 }

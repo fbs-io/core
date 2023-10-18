@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2023-10-16 20:26:20
+ * @LastEditTime: 2023-10-19 06:35:41
  * @Description: 回掉函数
  */
 package rdb
@@ -29,17 +29,16 @@ func (store *rdbStore) registerCallbacks() {
 //
 // TODO:增加多数据库模式完善中
 func (store *rdbStore) switchSharding(tx *gorm.DB) {
+	// 过滤初始化操作时的数据库操作
 	if tx.Statement == nil {
 		return
 	}
 	if tx.Statement.Schema == nil {
 		return
 	}
-	//TODO: 验证是否不传模型, 是否可以完成字段判断
-	tt := tx.Statement.Schema.FieldsByName["ShadingKey"]
 
-	// 如果没有sharding 分区字段, 不做处理
-	if tt == nil {
+	table := tx.Statement.Table
+	if !store.shardingAllTable[table] {
 		return
 	}
 
@@ -48,17 +47,25 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 		return
 	}
 
+	// TODO:细化条件查询
+	tx.Where("sk = ? ", sk)
+	if tx.Statement.BuildClauses != nil {
+		switch tx.Statement.BuildClauses[0] {
+		// case "SELECT":
+		// 	tx.Where("sk = ? ", sk)
+		case "UPDATE", "CREATE":
+			tx.Statement.SetColumn("sk", sk, true)
+		}
+	}
 	// 统一设置条件和设置字段
 	// 设置字段值, 用于更新, 创建用
-	tx.Statement.SetColumn("sk", sk, true)
+	// tx.Statement.SetColumn("sk", sk, true)
 	// 增加查询设置查询条件, 用于更新, 删除, 查询用
-	tx.Where("sk = ? ", sk)
 
-	table := tx.Statement.Table
-	// fmt.Println(table)
 	switch store.shardingModel {
-	case SHADING_MODEL_ONE:
-		// 暂无可设置
+	// case SHADING_MODEL_ONE:
+	// 	// 暂无可设置
+	// 	// tx.Where("sk = ? ", sk)
 	case SHADING_MODEL_TABLE:
 		// 有分区字段, 但是么有设置分区表
 		if store.shardingTable[table] != nil {
@@ -69,7 +76,6 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	case SHADING_MODEL_DB:
 		// TODO 完善DB逻辑
 	default:
-		return
 	}
 
 }
