@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2023-10-19 06:35:41
+ * @LastEditTime: 2023-10-29 15:43:40
  * @Description: 回掉函数
  */
 package rdb
@@ -36,12 +36,10 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	if tx.Statement.Schema == nil {
 		return
 	}
-
 	table := tx.Statement.Table
 	if !store.shardingAllTable[table] {
 		return
 	}
-
 	sk, ok := tx.Get(consts.CTX_SHARDING_KEY)
 	if !ok || sk.(string) == "" {
 		return
@@ -53,7 +51,7 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 		switch tx.Statement.BuildClauses[0] {
 		// case "SELECT":
 		// 	tx.Where("sk = ? ", sk)
-		case "UPDATE", "CREATE":
+		case "UPDATE", "INSERT":
 			tx.Statement.SetColumn("sk", sk, true)
 		}
 	}

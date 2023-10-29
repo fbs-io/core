@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-10-19 06:36:46
+ * @LastEditTime: 2023-10-19 07:28:14
  * @Description: 关系数据库配置
  */
 package rdb
@@ -247,16 +247,7 @@ func (store *rdbStore) Register(t Tabler, fs ...RegisterFunc) Store {
 				}
 			}
 		} else {
-			tx := store.db
-			err = tx.AutoMigrate(t)
-			rt := reflect.TypeOf(t).Elem()
-
-			rtModel, ok1 := rt.FieldByName("ShardingModel")
-			rtKey, ok2 := rt.FieldByName("ShadingKey")
-			// 通过多重判断, 确定模型中包含了分区字段
-			if ok1 && ok2 && rtModel.Name == "ShardingModel" && rtKey.Name == "ShadingKey" && strings.Contains(rtKey.Tag.Get("gorm"), "column:sk") {
-				store.shardingAllTable[t.TableName()] = true
-			}
+			err = store.db.AutoMigrate(t)
 			if err != nil {
 				return
 			}

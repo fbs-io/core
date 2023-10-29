@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 22:49:03
  * @LastEditors: reel
- * @LastEditTime: 2023-10-19 06:38:40
+ * @LastEditTime: 2023-10-19 07:28:22
  * @Description: 分区相关
  */
 package rdb
@@ -83,6 +83,8 @@ func (store *rdbStore) AutoShardingTable(tableName string) (err error) {
 	if tabler == nil {
 		return errorx.Errorf("无法获取表名为:%s的表结构:", tableName)
 	}
+
+	// 通过反射获取模型中是否包含分区字段用于创建分区
 	rt := reflect.TypeOf(tabler).Elem()
 	rtModel, ok1 := rt.FieldByName("ShardingModel")
 	rtKey, ok2 := rt.FieldByName("ShadingKey")
@@ -90,6 +92,7 @@ func (store *rdbStore) AutoShardingTable(tableName string) (err error) {
 	if ok1 && ok2 && rtModel.Name == "ShardingModel" && rtKey.Name == "ShadingKey" && strings.Contains(rtKey.Tag.Get("gorm"), "column:sk") {
 		store.shardingAllTable[tabler.TableName()] = true
 	}
+
 	if strings.Contains(env.Active().DBInit(), tableName) ||
 		env.Active().DBInit() == TABLE_INIT_ALL {
 		// 分区表在重置主表时也全部重置
