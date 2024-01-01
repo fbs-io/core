@@ -53,13 +53,6 @@ router.beforeEach(async (to, from, next) => {
 		return false;
 	}
 
-	// if(to.path === "/install" && !config.APP_INIT){
-	// 	next({
-	// 		path:"/"
-	// 	});
-	// 	return false;
-	// }
-
 	if(routes.findIndex(r => r.path === to.path) >= 0){
 		next();
 		return false;

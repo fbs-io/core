@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2023-10-17 22:14:23
+ * @LastEditTime: 2023-12-30 11:21:50
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -28,11 +28,12 @@ type context struct {
 }
 
 const (
-	CTX_PARAMS        = "ctx_params"
-	CTX_TX            = "ctx_tx"
-	CTX_AUTH          = consts.CTX_AUTH
-	CTX_REFLECT_VALUE = "reflect_value"
-	CTX_SHARDING_KEY  = consts.CTX_SHARDING_KEY
+	CTX_PARAMS              = "ctx_params"                   // 上下文的参数
+	CTX_TX                  = "ctx_tx"                       // 上下文的数据库信息
+	CTX_AUTH                = consts.CTX_AUTH                // 上下文的操作用户
+	CTX_REFLECT_VALUE       = "reflect_value"                // 上下文中的反射值,用于自动校验并生成参数
+	CTX_SHARDING_KEY        = consts.CTX_SHARDING_KEY        // 上下文的数据分区
+	CTX_DATA_PERMISSION_KEY = consts.CTX_DATA_PERMISSION_KEY // 上下文的数据权限
 
 	// 通过ctx生成查询tx的方式
 	// 适用于表中有id的查询, 通过子查询优化分页性能

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 22:49:03
  * @LastEditors: reel
- * @LastEditTime: 2023-10-19 07:28:22
+ * @LastEditTime: 2023-11-08 07:40:01
  * @Description: 分区相关
  */
 package rdb
@@ -91,6 +91,20 @@ func (store *rdbStore) AutoShardingTable(tableName string) (err error) {
 	// 通过多重判断, 确定模型中包含了分区字段
 	if ok1 && ok2 && rtModel.Name == "ShardingModel" && rtKey.Name == "ShadingKey" && strings.Contains(rtKey.Tag.Get("gorm"), "column:sk") {
 		store.shardingAllTable[tabler.TableName()] = true
+	}
+	// 增加数据权限字段的判断
+	rtModel, ok1 = rt.FieldByName("DataPermissionStringModel")
+	rtKey, ok2 = rt.FieldByName("DataPermission")
+	if ok1 && ok2 && rtModel.Name == "DataPermissionStringModel" && rtKey.Name == "DataPermission" && strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
+		store.dataPermissionTable[tabler.TableName()] = true
+		store.dataPermissionTable["DataPermissionStringModel"] = true
+	}
+	// 增加数据权限字段的判断
+	rtModel, ok1 = rt.FieldByName("DataPermissionIntModel")
+	rtKey, ok2 = rt.FieldByName("DataPermission")
+	if ok1 && ok2 && rtModel.Name == "DataPermissionIntModel" && rtKey.Name == "DataPermission" && strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
+		store.dataPermissionTable[tabler.TableName()] = true
+		store.dataPermissionTable["DataPermissionIntModel"] = true
 	}
 
 	if strings.Contains(env.Active().DBInit(), tableName) ||

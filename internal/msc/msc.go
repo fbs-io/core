@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-17 22:49:53
  * @LastEditors: reel
- * @LastEditTime: 2023-09-12 06:40:17
+ * @LastEditTime: 2023-12-30 20:45:48
  * @Description: 后台管理中心
  */
 package msc
@@ -14,7 +14,7 @@ import (
 	"github.com/fbs-io/core/cron"
 	"github.com/fbs-io/core/internal/config"
 	"github.com/fbs-io/core/logx"
-	"github.com/fbs-io/core/mscui"
+	"github.com/fbs-io/core/mscui/mscui"
 	"github.com/fbs-io/core/service"
 	"github.com/fbs-io/core/session"
 	"github.com/fbs-io/core/store/cache"
@@ -81,14 +81,20 @@ func Init(engine *gin.Engine, conf *config.Config, cache cache.Store, cron cron.
 	engine.Use(m.signature())
 
 	// 加载静态资源
-	engine.GET("/mscui/*filepath", func(ctx *gin.Context) {
-		staticSrv := http.FileServer(http.FS(mscui.Mscui))
+	engine.GET("/website/*filepath", func(ctx *gin.Context) {
+		staticSrv := http.FileServer(http.FS(mscui.Static))
 		staticSrv.ServeHTTP(ctx.Writer, ctx.Request)
 	})
 
 	engine.GET("/", func(ctx *gin.Context) {
 		ctx.Header("Content-Type", "text/html;charset=utf-8")
 		ctx.String(200, string(mscui.Index))
+	})
+
+	engine.NoRoute(func(ctx *gin.Context) {
+		ctx.Header("Content-Type", "text/html;charset=utf-8")
+		ctx.String(200, string(mscui.Index))
+		ctx.Writer.Flush()
 	})
 	// 区分后台管理中心和业务路由
 	mscui := engine.Group("msc")

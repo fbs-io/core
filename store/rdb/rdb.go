@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-10-19 07:28:14
+ * @LastEditTime: 2023-11-10 06:55:08
  * @Description: 关系数据库配置
  */
 package rdb
@@ -47,18 +47,21 @@ const (
 	TX_SHADING_TABLE_KEY    = "tx_sharding_table"
 	TX_CONDITION_BUILD_KEY  = "tx_condition_build"
 	TX_SUB_QUERY_COLUMN_KEY = "tx_sub_query_column"
+	TX_DATA_PERMISSION_KEY  = "tx_data_permission"
 )
 
 type rdbStore struct {
-	db               *gorm.DB
-	dial             gorm.Dialector
-	statTab          Tabler
-	tablers          map[string]Tabler
-	migrateList      []func() error
-	shardingTable    map[string][]string // 仅仅写入注册了分区表的表
-	shardingModel    int8
-	shardingSuffixs  []interface{}   //分区后缀
-	shardingAllTable map[string]bool // 模型注册时, 只要包含了分区字段的表, 都会写入到该map中, 用于回调函数判断是否增加分区字段
+	db                  *gorm.DB
+	dial                gorm.Dialector
+	statTab             Tabler
+	tablers             map[string]Tabler
+	isRunning           bool
+	migrateList         []func() error
+	shardingTable       map[string][]string // 仅仅写入注册了分区表的表
+	shardingModel       int8
+	shardingSuffixs     []interface{}   //分区后缀
+	shardingAllTable    map[string]bool // 模型注册时, 只要包含了分区字段的表, 都会写入到该map中, 用于回调函数判断是否增加分区字段
+	dataPermissionTable map[string]bool // 模型注册时, 只要包含了权限字段的表, 都会写入到该map中, 用于回调函数判断是否增加分区字段
 }
 
 type Store interface {
@@ -121,12 +124,13 @@ type Store interface {
 var _ Store = (*rdbStore)(nil)
 
 var rdb = &rdbStore{
-	db:               &gorm.DB{},
-	tablers:          make(map[string]Tabler, 1000),
-	migrateList:      make([]func() error, 0, 100),
-	shardingTable:    make(map[string][]string, 100),
-	shardingSuffixs:  make([]interface{}, 0, 100),
-	shardingAllTable: make(map[string]bool, 100),
+	db:                  &gorm.DB{},
+	tablers:             make(map[string]Tabler, 1000),
+	migrateList:         make([]func() error, 0, 100),
+	shardingTable:       make(map[string][]string, 100),
+	shardingSuffixs:     make([]interface{}, 0, 100),
+	shardingAllTable:    make(map[string]bool, 100),
+	dataPermissionTable: make(map[string]bool, 100),
 }
 
 func New() (s Store) {
@@ -160,18 +164,26 @@ func (store *rdbStore) Start() (err error) {
 	sqlDB.SetConnMaxLifetime(time.Hour)
 	// 注册回调函数
 	store.registerCallbacks()
-	return store.autoMigrate()
+	err = store.autoMigrate()
+	if err != nil {
+		return errorx.Wrap(err, "表迁移失败")
+	}
+	store.isRunning = true
+	return
 }
 
 // 通过查询获取当前db状态
 // 如果没有表, 默认当前不可用
 func (store *rdbStore) Status() int8 {
+	if !store.isRunning {
+		return -1
+	}
 	if store.statTab == nil {
-		return 0
+		return -1
 	}
 	err := store.db.FirstOrCreate(&(store.statTab)).Error
 	if err != nil {
-		return 0
+		return -1
 	}
 	return 1
 }

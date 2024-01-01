@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 06:04:12
  * @LastEditors: reel
- * @LastEditTime: 2023-10-15 21:59:51
+ * @LastEditTime: 2023-11-09 06:26:10
  * @Description: 定义常用的模型用于快速开发
  */
 
@@ -107,6 +107,8 @@ func (j ModeListJson) Value() (driver.Value, error) {
 	return string(b), err
 }
 
+// 定义分区字段
+// 用于表分区使用
 type ShardingModel struct {
 	ShadingKey string `json:"-" gorm:"column:sk;index;comment:分区"`
 }
@@ -147,4 +149,30 @@ func (m *ShardingModel) BeforeUpdate(tx *gorm.DB) error {
 func (m *ShardingModel) BeforeDelete(tx *gorm.DB) error {
 	m.txSharding(tx)
 	return nil
+}
+
+// 定义数据权限模型
+// 用于有数据权限需求的查询, 创建等, 和分区表的原理类似, 但不涉及到分表操作
+// 适用于string类型的数据
+type DataPermissionStringModel struct {
+	DataPermission string `json:"-" gorm:"column:dp;index;comment:数据权限"`
+}
+
+type DataPermissionStringCtx struct {
+	DataPermissionType  int8 //
+	DataPermission      string
+	DataPermissionScope []string
+}
+
+// 定义数据权限模型
+// 用于有数据权限需求的查询, 创建等, 和分区表的原理类似, 但不涉及到分表操作
+// 适用于int类型的数据
+type DataPermissionIntModel struct {
+	DataPermission int64 `json:"-" gorm:"column:dp;index;comment:数据权限"`
+}
+
+type DataPermissionIntCtx struct {
+	DataPermissionType  int8 //
+	DataPermission      int64
+	DataPermissionScope []int64
 }

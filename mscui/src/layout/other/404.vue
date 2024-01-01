@@ -1,7 +1,14 @@
+<!--
+ * @Author: reel
+ * @Date: 2023-09-16 16:37:54
+ * @LastEditors: reel
+ * @LastEditTime: 2023-12-30 17:15:54
+ * @Description: 请填写简介
+-->
 <template>
 	<div class="router-err">
 		<div class="router-err__icon">
-			<img src="/img/404.png" />
+			<img src="/website/img/404.png" />
 		</div>
 		<div class="router-err__content">
 			<h2>无权限或找不到页面</h2>
