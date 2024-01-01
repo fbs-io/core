@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 22:49:03
  * @LastEditors: reel
- * @LastEditTime: 2023-11-08 07:40:01
+ * @LastEditTime: 2024-01-01 21:10:26
  * @Description: 分区相关
  */
 package rdb
@@ -34,12 +34,12 @@ func (store *rdbStore) SetShardingModel(model int8, suffix []interface{}) {
 		store.shardingSuffixs = make([]interface{}, 0, 100)
 	}
 
-	store.db.Callback().Query().Before("*").Register("sharding", rdb.switchSharding)
-	store.db.Callback().Row().Before("*").Register("sharding", rdb.switchSharding)
-	store.db.Callback().Raw().Before("*").Register("sharding", rdb.switchSharding)
-	store.db.Callback().Create().Before("*").Register("sharding", rdb.switchSharding)
-	store.db.Callback().Update().Before("*").Register("sharding", rdb.switchSharding)
-	store.db.Callback().Delete().Before("*").Register("sharding", rdb.switchSharding)
+	store.db.Callback().Query().Before("*").Register("sharding", store.switchSharding)
+	store.db.Callback().Row().Before("*").Register("sharding", store.switchSharding)
+	store.db.Callback().Raw().Before("*").Register("sharding", store.switchSharding)
+	store.db.Callback().Create().Before("*").Register("sharding", store.switchSharding)
+	store.db.Callback().Update().Before("*").Register("sharding", store.switchSharding)
+	store.db.Callback().Delete().Before("*").Register("sharding", store.switchSharding)
 }
 
 func (store *rdbStore) ShardingModel() (model int8) {
@@ -67,7 +67,7 @@ func (store *rdbStore) AddMigrateList(fs ...func() error) {
 // 同时自动创建分区表
 func (store *rdbStore) AddShardingSuffixs(suffixs string) (err error) {
 	store.shardingSuffixs = append(store.shardingSuffixs, suffixs)
-	for tableName, _ := range store.shardingTable {
+	for tableName := range store.shardingTable {
 		store.AddShardingTable(tableName)
 		err = store.AutoShardingTable(tableName)
 		if err != nil {

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2023-12-31 22:38:31
+ * @LastEditTime: 2024-01-01 20:59:45
  * @Description: 回掉函数
  */
 package rdb
@@ -16,11 +16,11 @@ import (
 
 // TODO: 增加链路追踪
 func (store *rdbStore) registerCallbacks() {
-	store.db.Callback().Query().Before("*").Register("subQuery", rdb.subQuery)
-	store.db.Callback().Row().Before("*").Register("subQuery", rdb.subQuery)
-	store.db.Callback().Raw().Before("*").Register("subQuery", rdb.subQuery)
-	store.db.Callback().Create().Before("*").Register("creates", rdb.setCreatesCallback)
-	store.db.Callback().Update().Before("*").Register("updates", rdb.setUpdatesCallback)
+	store.db.Callback().Query().Before("*").Register("subQuery", store.subQuery)
+	store.db.Callback().Row().Before("*").Register("subQuery", store.subQuery)
+	store.db.Callback().Raw().Before("*").Register("subQuery", store.subQuery)
+	store.db.Callback().Create().Before("*").Register("creates", store.setCreatesCallback)
+	store.db.Callback().Update().Before("*").Register("updates", store.setUpdatesCallback)
 }
 
 // 目前只要用于表内分区和多表分区模式
@@ -44,26 +44,23 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	if !ok || sk.(string) == "" {
 		return
 	}
-
+	// 如果子查询, 则不再重复生成查询条件
+	columnI, ok := tx.Get(TX_SUB_QUERY_COLUMN_KEY)
+	if columnI != nil && ok {
+		return
+	}
 	// TODO:细化条件查询
 	tx.Where("sk = ? ", sk)
 	if tx.Statement.BuildClauses != nil {
 		switch tx.Statement.BuildClauses[0] {
-		// case "SELECT":
-		// 	tx.Where("sk = ? ", sk)
+
 		case "UPDATE", "INSERT":
 			tx.Statement.SetColumn("sk", sk, true)
 		}
 	}
-	// 统一设置条件和设置字段
-	// 设置字段值, 用于更新, 创建用
-	// tx.Statement.SetColumn("sk", sk, true)
-	// 增加查询设置查询条件, 用于更新, 删除, 查询用
 
 	switch store.shardingModel {
-	// case SHADING_MODEL_ONE:
-	// 	// 暂无可设置
-	// 	// tx.Where("sk = ? ", sk)
+
 	case SHADING_MODEL_TABLE:
 		// 有分区字段, 但是么有设置分区表
 		if store.shardingTable[table] != nil {
@@ -76,13 +73,12 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	default:
 	}
 
-	store.dataPermissonCallback(tx)
+	store.dataPermissonCallback(tx, nil)
 }
 
 // 子查询, 用于分页,由子查询的字段和构建条件时,可以设置子查询
 // 可以自定义子查询主键字段,
 func (store *rdbStore) subQuery(tx *gorm.DB) {
-	sk, _ := tx.Get(consts.CTX_SHARDING_KEY)
 
 	cbI, ok := tx.Get(TX_CONDITION_BUILD_KEY)
 	if !ok || cbI == nil {
@@ -99,11 +95,13 @@ func (store *rdbStore) subQuery(tx *gorm.DB) {
 
 	subColumns := fmt.Sprintf("sub%s", col)
 	sub = sub.Select(fmt.Sprintf("%s as %s ", col, subColumns))
-
 	// 用于分区
 	if tx.Statement.Schema.FieldsByName["ShadingKey"] != nil && store.shardingTable[table] == nil {
+		sk, _ := tx.Get(consts.CTX_SHARDING_KEY)
 		sub = sub.Where("sk = ? ", sk)
 	}
+	// 数据权限回调遇到子查询时, 无法直接获取上下文相关信息, 故传入原有的tx用于获取信息
+	store.dataPermissonCallback(tx, sub)
 	tx.Table(table).Joins(fmt.Sprintf("join ( ? ) t1 on t1.%s = %s", subColumns, col), sub)
 }
 
@@ -140,34 +138,35 @@ const (
 )
 
 // 对有数据权限的表进行操作
-func (store *rdbStore) dataPermissonCallback(tx *gorm.DB) {
+func (store *rdbStore) dataPermissonCallback(tx *gorm.DB, subTx *gorm.DB) *gorm.DB {
 	// 过滤初始化操作时的数据库操作
 	if tx.Statement == nil {
-		return
+		return tx
 	}
 	if tx.Statement.Schema == nil {
-		return
+		return tx
 	}
 	table := tx.Statement.Table
 	if !store.dataPermissionTable[table] {
-		return
+		return tx
 	}
 	dpi, ok := tx.Get(consts.CTX_DATA_PERMISSION_KEY)
 	if !ok && dpi != nil {
-		return
+		return tx
 	}
 
 	if store.dataPermissionTable["DataPermissionIntModel"] {
 		dp := dpi.(*DataPermissionIntCtx)
-		switchMoel[int64](tx, dp.DataPermissionType, dp.DataPermission, dp.DataPermissionScope)
+		tx = switchMoel[int64](tx, subTx, dp.DataPermissionType, dp.DataPermission, dp.DataPermissionScope)
 	} else if store.dataPermissionTable["DataPermissionStringModel"] {
 		dp := dpi.(*DataPermissionStringCtx)
-		switchMoel[string](tx, dp.DataPermissionType, dp.DataPermission, dp.DataPermissionScope)
+		tx = switchMoel[string](tx, subTx, dp.DataPermissionType, dp.DataPermission, dp.DataPermissionScope)
 	}
+	return tx
 }
 
 // 使用泛型完成该方法
-func switchMoel[T int64 | string](tx *gorm.DB, dataPermissionType int8, dataPermission T, dataPermissionScope []T) *gorm.DB {
+func switchMoel[T int64 | string](tx *gorm.DB, subTx *gorm.DB, dataPermissionType int8, dataPermission T, dataPermissionScope []T) *gorm.DB {
 
 	if tx.Statement.BuildClauses != nil {
 		auth, _ := tx.Get(consts.CTX_AUTH)
@@ -177,25 +176,41 @@ func switchMoel[T int64 | string](tx *gorm.DB, dataPermissionType int8, dataPerm
 			//本人可见
 			case DATA_PERMISSION_ONESELF:
 				auth, _ := tx.Get(consts.CTX_AUTH)
-				tx.Where("created_by = ? ", auth)
+				if subTx != nil {
+					subTx.Where("created_by = ? ", auth)
+				} else {
+					tx.Where("created_by = ? ", auth)
+				}
 			//全部可见
 			case DATA_PERMISSION_ALL:
 				// 不添加过滤条件
 			// 只可见当前部门, 传入当前部门
 			case DATA_PERMISSION_ONLY_DEPT:
-				tx.Where("dp = ? ", dataPermission).Or("created_by = ?", auth)
-
+				if subTx != nil {
+					subTx.Where("(dp = ? or created_by = ?)", dataPermission, auth)
+				} else {
+					tx.Where("(dp = ? or created_by = ?)", dataPermission, auth)
+				}
 			// 所在部门及子级可见, 自定义部门
 			case DATA_PERMISSION_ONLY_DEPT_ALL, DATA_PERMISSION_ONLY_CUSTOM:
-				tx.Where("dp in (?) ", dataPermissionScope).Or("created_by = ?", auth)
+				if subTx != nil {
+					subTx.Where("(dp in (?) or created_by = ? )", dataPermissionScope, auth)
+				} else {
+					tx.Where("(dp in (?) or created_by = ? )", dataPermissionScope, auth)
+				}
 			// 默认权限只有本人可见
 			default:
-				tx.Where("created_by = ? ", auth)
+				tx = tx.Where("created_by = ? ", auth)
+				if subTx != nil {
+					subTx.Where("created_by = ? ", auth)
+				} else {
+					tx.Where("created_by = ? ", auth)
+				}
 			}
-			// tx.Or("created_by = ?", auth)
 		case "INSERT":
 			tx.Statement.SetColumn("dp", dataPermission, true)
 		}
+
 	}
 	return tx
 }
