@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2023-11-10 06:55:08
+ * @LastEditTime: 2024-01-14 14:10:09
  * @Description: 关系数据库配置
  */
 package rdb
@@ -36,7 +36,9 @@ const (
 	// 按表分区, 根据分区字段值, 设置表后缀, 如果表设置了分区
 	SHADING_MODEL_TABLE
 
-	// 按库(schema)分区, 根据分区字段值, 设置不同的库名(schema)后缀
+	// 按库(不按schema)分区, 根据分区字段值, 设置不同的库名后缀
+	//
+	// 请注意, 要确保当前用户有创建数据库以及数据表的权限
 	SHADING_MODEL_DB
 
 	TABLE_INIT_ALL = "all"
@@ -52,7 +54,9 @@ const (
 
 type rdbStore struct {
 	db                  *gorm.DB
+	dsn                 *dsn.Dsn
 	dial                gorm.Dialector
+	dbPool              map[string]*gorm.DB
 	statTab             Tabler
 	tablers             map[string]Tabler
 	isRunning           bool
@@ -111,7 +115,7 @@ type Store interface {
 	// 获取可分区表
 	ShardingTable() map[string][]string
 
-	// SHADING_MODEL_TABLE(按表分区) 模式下, 自定义添加可用于分区的表
+	// // SHADING_MODEL_TABLE(按表分区) 模式下, 自定义添加可用于分区的表
 	AddShardingTable(table string)
 
 	// 添加启动前的前置执行程序
@@ -125,6 +129,7 @@ var _ Store = (*rdbStore)(nil)
 
 var rdb = &rdbStore{
 	db:                  &gorm.DB{},
+	dbPool:              map[string]*gorm.DB{},
 	tablers:             make(map[string]Tabler, 1000),
 	migrateList:         make([]func() error, 0, 100),
 	shardingTable:       make(map[string][]string, 100),
@@ -146,22 +151,11 @@ func (store *rdbStore) Start() (err error) {
 		return errorx.New("没有可用的DSN")
 	}
 
-	store.db, err = gorm.Open(store.dial, &gorm.Config{
-		Logger: logx.DB.LogMode(env.Active().GormLogLevel()),
-	})
-	if err != nil {
-		return errorx.Wrap(err, "数据库链接失败")
-	}
-	// 配置链接时间等
-	sqlDB, err := store.db.DB()
+	db, err := genDB(store.dial)
 	if err != nil {
 		return err
 	}
-
-	// TODO: 自定义配置连接池大小
-	sqlDB.SetMaxIdleConns(10)
-	sqlDB.SetMaxOpenConns(100)
-	sqlDB.SetConnMaxLifetime(time.Hour)
+	store.db = db
 	// 注册回调函数
 	store.registerCallbacks()
 	err = store.autoMigrate()
@@ -205,24 +199,12 @@ func (store *rdbStore) SetConfig(optfs ...dsn.DsnFunc) (err error) {
 	if link == "" {
 		return errorx.New("dsn 为空")
 	}
-
-	// 本地 db 进行的判断, db 为 sqlite
-	switch rdbDsn.Type {
-	case dsn.DSN_TYPE_LOCAL, dsn.DSN_TYPE_SQLITE: // 本地db使用 sqlite
-		_, err = os.Stat(rdbDsn.Path)
-		if err != nil {
-			err = os.MkdirAll(rdbDsn.Path, 0766)
-			if err != nil {
-				return err
-			}
-		}
-		store.dial = sqlite.Open(link)
-
-	case dsn.DSN_TYPE_PGSQL:
-		store.dial = postgres.Open(link)
-	case dsn.DSN_TYPE_MYSQL:
-		store.dial = mysql.Open(link)
+	store.dsn = rdbDsn
+	dial, err := genDial(rdbDsn)
+	if err != nil {
+		return err
 	}
+	store.dial = dial
 	return nil
 }
 
@@ -235,7 +217,7 @@ func (store *rdbStore) Register(t Tabler, fs ...RegisterFunc) Store {
 	store.migrateList = append(store.migrateList, func() (err error) {
 		// 根据实际使用, 系统资源表将在最后被加载
 		store.statTab = t
-		err = store.AutoShardingTable(t.TableName())
+		err = store.AutoShardingTable(t.TableName(), "")
 		if err != nil {
 			return
 		}
@@ -320,4 +302,58 @@ type RegisterFunc func() error
 
 func IsUniqueError(err error) (ok bool) {
 	return strings.Contains(err.Error(), "UNIQUE constraint failed:")
+}
+
+func genDB(dial gorm.Dialector) (db *gorm.DB, err error) {
+	db, err = gorm.Open(dial, &gorm.Config{
+		Logger: logx.DB.LogMode(env.Active().GormLogLevel()),
+	})
+	if err != nil {
+		return nil, errorx.Wrap(err, "数据库链接失败")
+	}
+	// 配置链接时间等
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: 自定义配置连接池大小
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(100)
+	sqlDB.SetConnMaxLifetime(time.Hour)
+	return
+}
+
+func genDial(rdbDsn *dsn.Dsn) (dial gorm.Dialector, err error) {
+	link := rdbDsn.Link()
+	if link == "" {
+		return nil, errorx.New("dsn 为空")
+	}
+
+	// 本地 db 进行的判断, db 为 sqlite
+	switch rdbDsn.Type {
+	case dsn.DSN_TYPE_LOCAL, dsn.DSN_TYPE_SQLITE: // 本地db使用 sqlite
+		_, err = os.Stat(rdbDsn.Path)
+		if err != nil {
+			err = os.MkdirAll(rdbDsn.Path, 0766)
+			if err != nil {
+				return nil, err
+			}
+		}
+		dial = sqlite.Open(link)
+
+	case dsn.DSN_TYPE_PGSQL:
+		dial = postgres.Open(link)
+	case dsn.DSN_TYPE_MYSQL:
+		dial = mysql.Open(link)
+	}
+	return dial, nil
+}
+
+func genDBWithDsn(rdbDsn *dsn.Dsn) (db *gorm.DB, err error) {
+	dial, err := genDial(rdbDsn)
+	if err != nil {
+		return nil, err
+	}
+	return genDB(dial)
 }

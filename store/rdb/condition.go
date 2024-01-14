@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 06:55:41
  * @LastEditors: reel
- * @LastEditTime: 2023-10-15 10:25:02
+ * @LastEditTime: 2024-01-14 12:59:38
  * @Description: 根据条件结构体, 自动构建查询语句, 并返回gorm.DB, 用于扩展
  */
 package rdb
@@ -88,7 +88,7 @@ func (store *rdbStore) BuildQueryWihtSubQryID(cb *Condition) (tx *gorm.DB) {
 //
 // 不适用于大表的翻页查询, 大表查询请优化表结构
 func (store *rdbStore) BuildQuery(cb *Condition) (tx *gorm.DB) {
-	tx = store.db
+	tx = store.DB()
 	for k, v := range cb.Where {
 		tx = tx.Where(k, v)
 	}
@@ -202,6 +202,8 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 // 仅适用单表的简单where-and条件查询, 不适用于复杂关联查询
 //
 // 复杂业务查询须手动处理或构建查询视图
+//
+// 请注意, 该方法不适用于多库分区的查询构建
 func (store *rdbStore) BuildQueryWithParams(params reflect.Value) *gorm.DB {
 	cb := GenConditionWithParams(params)
 	tx := store.BuildQuery(cb)

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-08-14 20:39:55
  * @LastEditors: reel
- * @LastEditTime: 2023-08-16 21:28:17
+ * @LastEditTime: 2024-01-14 17:38:07
  * @Description: 适用于gorm的logger
  */
 package logx

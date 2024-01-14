@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2023-12-30 11:21:50
+ * @LastEditTime: 2024-01-14 14:05:28
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -28,8 +28,8 @@ type context struct {
 }
 
 const (
-	CTX_PARAMS              = "ctx_params"                   // 上下文的参数
 	CTX_TX                  = "ctx_tx"                       // 上下文的数据库信息
+	CTX_PARAMS              = "ctx_params"                   // 上下文的参数
 	CTX_AUTH                = consts.CTX_AUTH                // 上下文的操作用户
 	CTX_REFLECT_VALUE       = "reflect_value"                // 上下文中的反射值,用于自动校验并生成参数
 	CTX_SHARDING_KEY        = consts.CTX_SHARDING_KEY        // 上下文的数据分区
@@ -353,7 +353,7 @@ func QryDelete() TxOptsFunc {
 }
 
 // 通过传入参数设置查询方式
-func (c *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
+func (ctx *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
 	txopt := &txOpts{
 		mode: "",
 	}
@@ -361,16 +361,17 @@ func (c *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
 	for _, optfunc := range optFunc {
 		optfunc(txopt)
 	}
-
-	rvi, ok := c.ctx.Get(CTX_REFLECT_VALUE)
+	sk, _ := ctx.CtxGet(CTX_SHARDING_KEY).(string)
+	rvi, ok := ctx.ctx.Get(CTX_REFLECT_VALUE)
 	if !ok {
 		return nil
 	}
-	store := c.core.RDB()
+	store := ctx.core.RDB()
 	tx := store.DB().Where("1 = 1")
 
 	cb := rdb.GenConditionWithParams(rvi.(reflect.Value))
 	cb.QryDelete = txopt.qryDelete
+	cb.ShardingKey = sk
 	if txopt.tableName != "" {
 		cb.TableName = txopt.tableName
 	}
@@ -381,7 +382,7 @@ func (c *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
 	default:
 		tx = store.BuildQuery(cb)
 	}
-	for k, v := range c.ctx.Copy().Keys {
+	for k, v := range ctx.ctx.Copy().Keys {
 		tx.Set(k, v)
 	}
 
@@ -400,9 +401,10 @@ func (c *context) Auth() (auth string) {
 	return authI.(string)
 }
 
-func (c *context) NewTX(optFunc ...TxOptsFunc) *gorm.DB {
-	tx := c.Core().RDB().DB().Where("1=1")
-	for k, v := range c.ctx.Copy().Keys {
+func (ctx *context) NewTX(optFunc ...TxOptsFunc) *gorm.DB {
+	tx := ctx.Core().RDB().DB().Where("1=1")
+
+	for k, v := range ctx.ctx.Copy().Keys {
 		tx.Set(k, v)
 	}
 	return tx
