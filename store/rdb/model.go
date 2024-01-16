@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 06:04:12
  * @LastEditors: reel
- * @LastEditTime: 2023-11-09 06:26:10
+ * @LastEditTime: 2024-01-15 22:38:34
  * @Description: 定义常用的模型用于快速开发
  */
 
@@ -175,4 +175,8 @@ type DataPermissionIntCtx struct {
 	DataPermissionType  int8 //
 	DataPermission      int64
 	DataPermissionScope []int64
+}
+
+type DeleteParams struct {
+	ID []uint `json:"id" binding:"required" conditions:"-"`
 }

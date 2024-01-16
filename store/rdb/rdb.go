@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2024-01-14 14:10:09
+ * @LastEditTime: 2024-01-16 00:00:27
  * @Description: 关系数据库配置
  */
 package rdb
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/fbs-io/core/logx"
+	"github.com/fbs-io/core/pkg/consts"
 	"github.com/fbs-io/core/pkg/env"
 	"github.com/fbs-io/core/pkg/errorx"
 	"github.com/fbs-io/core/store/dsn"
@@ -356,4 +357,20 @@ func genDBWithDsn(rdbDsn *dsn.Dsn) (db *gorm.DB, err error) {
 		return nil, err
 	}
 	return genDB(dial)
+}
+
+func GetShardingKey(tx *gorm.DB) (sk string) {
+	ski, ok := tx.Get(consts.CTX_SHARDING_KEY)
+	if ok && ski != nil {
+		sk = ski.(string)
+	}
+	return
+}
+
+func CopyCtx(oldTx, newTx *gorm.DB) {
+	oldTx.Statement.Settings.Range(func(key, value any) bool {
+		newTx.Set(key.(string), value)
+		return true
+	})
+
 }

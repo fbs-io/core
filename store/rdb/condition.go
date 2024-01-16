@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 06:55:41
  * @LastEditors: reel
- * @LastEditTime: 2024-01-14 12:59:38
+ * @LastEditTime: 2024-01-14 17:39:59
  * @Description: 根据条件结构体, 自动构建查询语句, 并返回gorm.DB, 用于扩展
  */
 package rdb
@@ -127,7 +127,6 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 	cb := NewCondition()
 	paramsType := params.Type().Elem()
 	for i := 0; i < params.Elem().NumField(); i++ {
-		// fmt.Println("+++++++++", paramsType.Field(i))
 		if paramsType.Field(i).Name == "ShardingModel" {
 			cb.IsSharding = true
 		}

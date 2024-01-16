@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2024-01-14 17:04:49
+ * @LastEditTime: 2024-01-14 20:42:40
  * @Description: 回掉函数
  */
 package rdb
@@ -86,7 +86,6 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 		case SHADING_MODEL_DB:
 			db := store.dbPool[sk.(string)]
 			if db != nil {
-				fmt.Println("4")
 				tx.Statement.ConnPool = db.Config.ConnPool
 				if sub != nil {
 					sub.Statement.ConnPool = db.Config.ConnPool
