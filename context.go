@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2024-01-14 14:05:28
+ * @LastEditTime: 2024-03-21 06:42:44
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -353,7 +353,7 @@ func QryDelete() TxOptsFunc {
 }
 
 // 通过传入参数设置查询方式
-func (ctx *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
+func (ctx *context) TX(optFunc ...TxOptsFunc) (tx *gorm.DB) {
 	txopt := &txOpts{
 		mode: "",
 	}
@@ -362,12 +362,13 @@ func (ctx *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
 		optfunc(txopt)
 	}
 	sk, _ := ctx.CtxGet(CTX_SHARDING_KEY).(string)
+	tx = ctx.Core().RDB().DB().Where("1 = 1")
+
+	// 如果没有参数, 直接返回
 	rvi, ok := ctx.ctx.Get(CTX_REFLECT_VALUE)
 	if !ok {
-		return nil
+		return
 	}
-	store := ctx.core.RDB()
-	tx := store.DB().Where("1 = 1")
 
 	cb := rdb.GenConditionWithParams(rvi.(reflect.Value))
 	cb.QryDelete = txopt.qryDelete
@@ -380,13 +381,12 @@ func (ctx *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
 		tx.Set(rdb.TX_CONDITION_BUILD_KEY, cb)
 		tx.Set(rdb.TX_SUB_QUERY_COLUMN_KEY, "id")
 	default:
-		tx = store.BuildQuery(cb)
+		tx = ctx.Core().RDB().BuildQuery(cb)
 	}
 	for k, v := range ctx.ctx.Copy().Keys {
 		tx.Set(k, v)
 	}
-
-	return tx
+	return
 }
 
 func (c *context) Core() Core {

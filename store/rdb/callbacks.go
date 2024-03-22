@@ -2,16 +2,18 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2024-01-14 20:42:40
+ * @LastEditTime: 2024-01-20 14:13:22
  * @Description: 回掉函数
  */
 package rdb
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/fbs-io/core/pkg/consts"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // TODO: 增加链路追踪
@@ -55,7 +57,7 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	// if columnI != nil && ok {
 	// 	return
 	// }
-
+	// fmt.Println(tx.Statement.Selects)
 	if tx.Statement.BuildClauses != nil {
 		switch tx.Statement.BuildClauses[0] {
 		case "SELECT":
@@ -269,13 +271,19 @@ func (store *rdbStore) buildSubQuery(tx *gorm.DB) (sub *gorm.DB) {
 	if columnI == nil || !ok {
 		return
 	}
+	// 通过该方法判断是否查询count(*)总数方法,
+	// 查询总数去除可能存在的子查询
+	if strings.Contains(strings.ToLower(fmt.Sprintf("%v", tx.Statement.Clauses["SELECT"].Expression)), "count(*)") {
+		tx.Statement.Clauses["FROM"] = clause.Clause{}
+		return
 
+	}
 	table := tx.Statement.Table
 	col := columnI.(string)
 	cb := cbI.(*Condition)
 
 	sub = rdb.BuildQuery(cb).Table(table)
-	sub.Where("deleted_at = 0 or deleted_at is null")
+	sub.Where("deleted_at = 0 or deleted_at is null").Order("id")
 	subColumns := fmt.Sprintf("sub%s", col)
 	sub = sub.Select(fmt.Sprintf("%s as %s ", col, subColumns))
 	tx.Table(table).Joins(fmt.Sprintf("join ( ? ) t1 on t1.%s = %s", subColumns, col), sub)

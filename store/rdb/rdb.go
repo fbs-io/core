@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2024-01-16 00:00:27
+ * @LastEditTime: 2024-03-17 11:26:07
  * @Description: 关系数据库配置
  */
 package rdb
@@ -230,24 +230,24 @@ func (store *rdbStore) Register(t Tabler, fs ...RegisterFunc) Store {
 				if err != nil {
 					return
 				}
-				err = store.db.AutoMigrate(t)
+			}
+		}
+		isHasTable := false
+		if store.db.Migrator().HasTable(t) {
+			isHasTable = true
+		}
+		err = store.db.AutoMigrate(t)
+		if err != nil {
+			return
+		}
+		if !isHasTable {
+			for _, f := range fs {
+				err = f()
 				if err != nil {
 					return
 				}
-				for _, f := range fs {
-					err = f()
-					if err != nil {
-						return
-					}
-				}
-			}
-		} else {
-			err = store.db.AutoMigrate(t)
-			if err != nil {
-				return
 			}
 		}
-
 		return
 
 	})

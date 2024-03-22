@@ -69,7 +69,7 @@ router.beforeEach(async (to, from, next) => {
 		});
 		return false;
 	}
-
+	console.log("to.matched",to.matched)
 	//整页路由处理
 	if(to.meta.fullpage){
 		to.matched = [to.matched[to.matched.length-1]]

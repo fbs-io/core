@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2023-09-05 23:30:16
+ * @LastEditTime: 2024-03-12 23:41:47
  * @Description: 常用的中间件
  */
 package core
@@ -77,6 +77,17 @@ func CorsMiddleware(c Core) gin.HandlerFunc {
 // 日志中间件
 func LogMiddleware(c Core) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		defer func() {
+			if err := recover(); err != nil {
+				logx.Sys.Warn("http请求发生错误", logx.F("status", ctx.Writer.Status()),
+					logx.F("client_ip", ctx.ClientIP()),
+					logx.F("req_method", ctx.Request.Method),
+					logx.F("req_url", ctx.Request.RequestURI),
+					logx.F("error", fmt.Sprintf("%v", err)),
+				)
+			}
+
+		}()
 		startTime := time.Now()
 		ctx.Next()
 		if strings.Contains(ctx.Request.RequestURI, STATIC_PATH_PREFIX) {

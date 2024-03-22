@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2023-09-11 07:34:21
+ * @LastEditTime: 2024-03-17 16:01:15
  * @Description: 管理核心组件的启动和运行
  */
 package core
@@ -73,6 +73,9 @@ type Core interface {
 
 	// 配置
 	Config() *config.Config
+
+	// 添加启动时的一些作业
+	AddStartJobList(...mux.StartJobFunc)
 }
 
 func (c *core) coreP() {}
