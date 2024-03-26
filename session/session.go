@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-06 19:21:05
  * @LastEditors: reel
- * @LastEditTime: 2023-10-06 22:36:47
+ * @LastEditTime: 2024-03-26 07:48:26
  * @Description: session 模块
  */
 package session
@@ -24,18 +24,24 @@ import (
 	"github.com/google/uuid"
 )
 
-// type Values sync.Map
+var (
+	ERROR_SESSION_LENGTH     = errorx.New("无法正确获取到session")
+	ERROR_SESSION_NOT_LOGIN  = errorx.New("账户未登陆或登陆信息已生效，请重新登陆")
+	ERROR_SESSION_ELSE_LOGIN = errorx.New("已在其他地方登陆, 请重新登陆")
+)
 
 type session struct {
 	lifeTime   int // 秒
 	cookieName string
 	prefix     string
+	singular   string // 校验是否单用户登陆
 	store      cache.Store
 }
 
 type Session interface {
 	sessionP()
 	CookieName() string
+	Singular() string // 是否单用户登陆, Y表示是, N或空表示否
 	SetWithToken(sessionKey, sessionValue string)
 	GetWithCookie(r *http.Request) (cookieValue, value string, err error)
 	SetWithCookie(w http.ResponseWriter, cookieValue, internalValue string)
@@ -56,12 +62,13 @@ func (s *session) sessionP() {}
 var _ Session = (*session)(nil)
 
 // 默认有效期30分钟
-// 默认cookiename=sid
+// 默认cookiename=sid, 单用户登陆
 // 默认使用本地缓存, 底层为buntdb作为缓存支撑, 接口为store/cache.store
 func New(funs ...optFunc) Session {
 	opt := &option{
 		lifeTime:   1800,
 		cookieName: "sid",
+		singular:   "Y",
 	}
 	for _, f := range funs {
 		f(opt)
@@ -83,6 +90,7 @@ func New(funs ...optFunc) Session {
 		cookieName: opt.cookieName,
 		store:      opt.store,
 		prefix:     opt.prefix,
+		singular:   opt.singular,
 	}
 
 	return s
@@ -91,17 +99,18 @@ func New(funs ...optFunc) Session {
 // 自动生成cookie的值, 36位长度
 // 同时把cookie写入缓存中
 // 如果没有设置缓存的值, 以cookie名称补充, 表示为未登陆用户
-func (s *session) SetWithCookie(w http.ResponseWriter, cookieValue, internalValue string) {
-	if cookieValue == "" {
-		cookieValue = GenSessionKey()
+func (s *session) SetWithCookie(w http.ResponseWriter, sessionKey, sessionValue string) {
+	if sessionKey == "" {
+		sessionKey = GenSessionKey()
 	}
-	if internalValue == "" {
-		internalValue = s.cookieName
+	if sessionValue == "" {
+		sessionValue = s.cookieName
 	}
-	s.store.Set(s.GenStoreKey(cookieValue), internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
+	s.setSession(sessionKey, sessionValue)
+
 	cookie := &http.Cookie{
 		Name:     s.cookieName,
-		Value:    url.QueryEscape(cookieValue),
+		Value:    url.QueryEscape(sessionKey),
 		MaxAge:   s.lifeTime,
 		Path:     "/",
 		Domain:   "",
@@ -116,17 +125,10 @@ func (s *session) SetWithCookie(w http.ResponseWriter, cookieValue, internalValu
 func (s *session) GetWithCookie(r *http.Request) (sessionKey, sessionValue string, err error) {
 	cookie, err := r.Cookie(s.cookieName)
 	if err != nil {
-		return "", "", err
+		return "", "", ERROR_SESSION_NOT_LOGIN
 	}
 	sessionKey, _ = url.QueryUnescape(cookie.Value)
-	if len(sessionKey) != 48 {
-		return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
-	}
-	sessionValue = s.store.Get(s.GenStoreKey(sessionKey))
-	if sessionValue == "" || sessionValue == s.cookieName {
-		return "", "", errorx.New("账户未登陆或登陆信息已生效，请重新登陆")
-	}
-	return
+	return s.getSession(sessionKey)
 }
 
 // 用于前端cookie存储的名字
@@ -144,21 +146,14 @@ func (s *session) GetSessionWithCookie(r *http.Request, w http.ResponseWriter) (
 
 // 设置token
 func (s *session) SetWithToken(sessionKey, sessionValue string) {
-	s.store.Set(s.GenStoreKey(sessionKey), sessionValue, cache.SetTTL(time.Duration(s.lifeTime)))
+	s.setSession(sessionKey, sessionValue)
 }
 
 // 获取token
 func (s *session) GetWithToken(r *http.Request) (sessionKey, sessionValue string, err error) {
 	token := r.Header.Get("Authorization")
 	sessionKey, _ = url.QueryUnescape(token)
-	if len(sessionKey) != 48 {
-		return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
-	}
-	sessionValue = s.store.Get(s.GenStoreKey(sessionKey))
-	if sessionValue == "" || sessionValue == s.cookieName {
-		return "", "", errorx.New("账户未登陆或登陆信息已生效，请重新登陆")
-	}
-	return
+	return s.getSession(sessionKey)
 }
 
 func GenSessionKey() string {
@@ -172,15 +167,15 @@ func GenSessionKey() string {
 // 自动生成session的值, 36位长度
 // 同时把session写入缓存中请求头SID中
 // 如果没有设置缓存的值, 以cookie名称补充, 表示为未登陆用户
-func (s *session) SetWithSid(w http.ResponseWriter, cookieValue, internalValue string) {
-	if cookieValue == "" {
-		cookieValue = GenSessionKey()
+func (s *session) SetWithSid(w http.ResponseWriter, sessionKey, sessionValue string) {
+	if sessionKey == "" {
+		sessionKey = GenSessionKey()
 	}
-	if internalValue == "" {
-		internalValue = s.cookieName
+	if sessionValue == "" {
+		sessionValue = s.cookieName
 	}
-	s.store.Set(s.GenStoreKey(cookieValue), internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
-	w.Header().Set("SID", cookieValue)
+	s.setSession(sessionKey, sessionValue)
+	w.Header().Set("SID", sessionKey)
 }
 
 // 通过sid获取session
@@ -188,28 +183,21 @@ func (s *session) GetWithSid(r *http.Request) (sessionKey, sessionValue string, 
 	cookie := r.Header.Get(s.cookieName)
 
 	sessionKey, _ = url.QueryUnescape(cookie)
-	if len(sessionKey) != 48 {
-		return "", "", fmt.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
-	}
-	sessionValue = s.store.Get(s.GenStoreKey(sessionKey))
-	if sessionValue == "" || sessionValue == s.cookieName {
-		return "", "", errorx.New("账户未登陆或登陆信息已生效，请重新登陆")
-	}
-	return
+	return s.getSession(sessionKey)
 }
 
 // 自动生成session的值, 36位长度
 // 同时把session写入缓存中请求头X-CSRF-TOKEN中
 // 如果没有设置缓存的值, 以cookie名称补充, 表示为未登陆用户
-func (s *session) SetWithCsrfToken(w http.ResponseWriter, cookieValue, internalValue string) {
-	if cookieValue == "" {
-		cookieValue = GenSessionKey()
+func (s *session) SetWithCsrfToken(w http.ResponseWriter, sessionKey, sessionValue string) {
+	if sessionKey == "" {
+		sessionKey = GenSessionKey()
 	}
-	if internalValue == "" {
-		internalValue = s.cookieName
+	if sessionValue == "" {
+		sessionValue = s.cookieName
 	}
-	s.store.Set(s.GenStoreKey(cookieValue), internalValue, cache.SetTTL(time.Duration(s.lifeTime)))
-	w.Header().Set("X-CSRF-TOKEN", cookieValue)
+	s.setSession(sessionKey, sessionValue)
+	w.Header().Set("X-CSRF-TOKEN", sessionKey)
 }
 
 // 通过Authorization获取session
@@ -221,16 +209,45 @@ func (s *session) GetWithCsrfToken(r *http.Request) (sessionKey, sessionValue st
 	if len(auth) == 2 {
 		sessionKey = auths[1]
 	}
-	if len(sessionKey) != 48 {
-		return "", "", errorx.Errorf("无法正确获取到session, session长度:%d", len(sessionValue))
-	}
-	sessionValue = s.store.Get(s.GenStoreKey(sessionKey))
-	if sessionValue == "" || sessionValue == s.cookieName {
-		return "", "", errorx.New("账户未登陆或登陆信息已生效，请重新登陆")
-	}
-	return
+	return s.getSession(sessionKey)
 }
 
 func (s *session) GenStoreKey(sessionKey string) string {
 	return fmt.Sprintf("%s::%s", s.prefix, sessionKey)
+}
+
+// 获取session是否单用户登陆
+func (s *session) Singular() string {
+	return s.singular
+}
+
+// 设置session
+func (s *session) setSession(sessionKey, sessionValue string) {
+	s.store.Set(s.GenStoreKey(sessionKey), sessionValue, cache.SetTTL(time.Duration(s.lifeTime)))
+	if s.singular == "Y" {
+		s.store.Set(sessionValue, sessionKey)
+	}
+}
+
+// 获取session
+func (s *session) getSession(sessionKey string) (sessionKey2, sessionValue string, err error) {
+
+	if len(sessionKey) != 48 {
+		return "", "", ERROR_SESSION_LENGTH
+	}
+	sessionValue = s.store.Get(s.GenStoreKey(sessionKey))
+	if sessionValue == "" || sessionValue == s.cookieName {
+		return "", "", ERROR_SESSION_NOT_LOGIN
+	}
+	if s.singular == "Y" {
+		lastKey := s.store.Get(sessionValue)
+		if lastKey == "" {
+			s.store.Set(sessionValue, sessionKey, cache.SetTTL(1800))
+		} else {
+			if lastKey != sessionKey {
+				return "", "", ERROR_SESSION_ELSE_LOGIN
+			}
+		}
+	}
+	return sessionKey, sessionValue, nil
 }
