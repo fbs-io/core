@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-04 15:27:47
  * @LastEditors: reel
- * @LastEditTime: 2023-09-14 21:41:02
+ * @LastEditTime: 2024-03-27 05:36:57
  * @Description: 请填写简介
 -->
 <template>
@@ -220,7 +220,7 @@
 		},
 		mounted(){
 				setInterval(() => {
-					if(location.pathname.includes("/mscui/overview")){
+					if(location.pathname.includes("/overview")){
 						this.sys()
 						this.loading = false
 					}

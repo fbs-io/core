@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-13 06:16:22
  * @LastEditors: reel
- * @LastEditTime: 2023-06-14 20:43:29
+ * @LastEditTime: 2024-03-27 05:36:37
  * @Description: 请填写简介
 -->
 <template>
@@ -70,8 +70,10 @@
         mounted(){
             this.$emit('on-mounted')
 			setInterval(() => {
-				this.getSrvStatus()
-				this.loading = false
+                if(location.pathname.includes("/overview")){
+                    this.getSrvStatus()
+				    this.loading = false
+			    }
 			}, 5000)
         },
         methods:{
