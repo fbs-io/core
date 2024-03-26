@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2023-09-05 06:21:09
+ * @LastEditTime: 2024-03-27 04:47:12
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/fbs-io/core/pkg/consts"
 	"github.com/fbs-io/core/pkg/errno"
 	"github.com/fbs-io/core/store/rdb"
 	"github.com/gin-gonic/gin"
@@ -27,13 +28,14 @@ type context struct {
 }
 
 const (
-	CTX_PARAMS        = "ctx_params"
-	CTX_TX            = "ctx_tx"
-	CTX_AUTH          = "ctx_auth"
-	CTX_REFLECT_VALUE = "reflect_value"
+	CTX_TX                  = "ctx_tx"                       // 上下文的数据库信息
+	CTX_PARAMS              = "ctx_params"                   // 上下文的参数
+	CTX_AUTH                = consts.CTX_AUTH                // 上下文的操作用户
+	CTX_REFLECT_VALUE       = "reflect_value"                // 上下文中的反射值,用于自动校验并生成参数
+	CTX_SHARDING_KEY        = consts.CTX_SHARDING_KEY        // 上下文的数据分区
+	CTX_DATA_PERMISSION_KEY = consts.CTX_DATA_PERMISSION_KEY // 上下文的数据权限
 
 	// 通过ctx生成查询tx的方式
-
 	// 适用于表中有id的查询, 通过子查询优化分页性能
 	TX_QRY_MODE_SUBID = "subid"
 	TX_QRY_DELETE     = true
@@ -149,7 +151,7 @@ var ctxPool = &sync.Pool{
 }
 
 // 新建一个上下文
-func newCtx(c Core, ctx *gin.Context) Context {
+func NewCtx(c Core, ctx *gin.Context) Context {
 	ct := ctxPool.Get().(*context)
 	ct.ctx = ctx
 	ct.core = c
@@ -351,7 +353,7 @@ func QryDelete() TxOptsFunc {
 }
 
 // 通过传入参数设置查询方式
-func (c *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
+func (ctx *context) TX(optFunc ...TxOptsFunc) (tx *gorm.DB) {
 	txopt := &txOpts{
 		mode: "",
 	}
@@ -359,29 +361,32 @@ func (c *context) TX(optFunc ...TxOptsFunc) *gorm.DB {
 	for _, optfunc := range optFunc {
 		optfunc(txopt)
 	}
+	sk, _ := ctx.CtxGet(CTX_SHARDING_KEY).(string)
+	tx = ctx.Core().RDB().DB().Where("1 = 1")
 
-	rvi, ok := c.ctx.Get(CTX_REFLECT_VALUE)
+	// 如果没有参数, 直接返回
+	rvi, ok := ctx.ctx.Get(CTX_REFLECT_VALUE)
 	if !ok {
-		return nil
+		return
 	}
-	var tx *gorm.DB
+
 	cb := rdb.GenConditionWithParams(rvi.(reflect.Value))
 	cb.QryDelete = txopt.qryDelete
+	cb.ShardingKey = sk
 	if txopt.tableName != "" {
 		cb.TableName = txopt.tableName
 	}
 	switch txopt.mode {
 	case TX_QRY_MODE_SUBID:
-		tx = c.core.RDB().BuildQueryWihtSubQryID(cb)
+		tx.Set(rdb.TX_CONDITION_BUILD_KEY, cb)
+		tx.Set(rdb.TX_SUB_QUERY_COLUMN_KEY, "id")
 	default:
-		tx = c.Core().RDB().BuildQuery(cb)
+		tx = ctx.Core().RDB().BuildQuery(cb)
 	}
-	auth, ok := c.ctx.Get("auth")
-	if ok {
-		tx.Set("auth", fmt.Sprintf("%v", auth))
+	for k, v := range ctx.ctx.Copy().Keys {
+		tx.Set(k, v)
 	}
-
-	return tx
+	return
 }
 
 func (c *context) Core() Core {
@@ -396,6 +401,11 @@ func (c *context) Auth() (auth string) {
 	return authI.(string)
 }
 
-func (c *context) NewTX(optFunc ...TxOptsFunc) *gorm.DB {
-	return c.Core().RDB().DB()
+func (ctx *context) NewTX(optFunc ...TxOptsFunc) *gorm.DB {
+	tx := ctx.Core().RDB().DB().Where("1=1")
+
+	for k, v := range ctx.ctx.Copy().Keys {
+		tx.Set(k, v)
+	}
+	return tx
 }

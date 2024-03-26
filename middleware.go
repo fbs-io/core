@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2023-09-05 23:30:16
+ * @LastEditTime: 2024-03-27 04:43:08
  * @Description: 常用的中间件
  */
 package core
@@ -17,6 +17,7 @@ import (
 	"github.com/fbs-io/core/logx"
 	"github.com/fbs-io/core/pkg/errno"
 	"github.com/fbs-io/core/pkg/errorx"
+	"github.com/fbs-io/core/session"
 	"github.com/gin-gonic/gin"
 )
 
@@ -77,6 +78,17 @@ func CorsMiddleware(c Core) gin.HandlerFunc {
 // 日志中间件
 func LogMiddleware(c Core) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		defer func() {
+			if err := recover(); err != nil {
+				logx.Sys.Warn("http请求发生错误", logx.F("status", ctx.Writer.Status()),
+					logx.F("client_ip", ctx.ClientIP()),
+					logx.F("req_method", ctx.Request.Method),
+					logx.F("req_url", ctx.Request.RequestURI),
+					logx.F("error", fmt.Sprintf("%v", err)),
+				)
+			}
+
+		}()
 		startTime := time.Now()
 		ctx.Next()
 		if strings.Contains(ctx.Request.RequestURI, STATIC_PATH_PREFIX) {
@@ -112,10 +124,22 @@ func requestKey(ctx *gin.Context) string {
 	return fmt.Sprintf("%s:%s", ctx.Request.Method, ctx.FullPath())
 }
 
+type signatureOption struct {
+	sessionType string // session类型, 以那种方式存储session
+}
+
+type SignatureOptFunc func(*signatureOption)
+
+func SetSeesionType(sessionType string) SignatureOptFunc {
+	return func(o *signatureOption) {
+		o.sessionType = sessionType
+	}
+}
+
 // 校验签名中间件
 // 如果没有登陆, 则会给一个默认的签名
 // Singular: 默认 token 模式， 同时可以选择cookie，sid, csrftoken方式
-func SignatureMiddleware(c Core, singular string) gin.HandlerFunc {
+func SignatureMiddleware(c Core, sop ...SignatureOptFunc) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		if allowSource[requestKey(ctx)] {
 			ctx.Next()
@@ -130,7 +154,13 @@ func SignatureMiddleware(c Core, singular string) gin.HandlerFunc {
 			sessiionValue string
 			err           error
 		)
-		switch singular {
+		var opt = &signatureOption{
+			sessionType: SINGULAR_TYPE_CSRF_TOKEN,
+		}
+		for _, fc := range sop {
+			fc(opt)
+		}
+		switch opt.sessionType {
 		case SINGULAR_TYPE_COOKIE:
 			sessionKey, sessiionValue, err = c.Session().GetWithCookie(ctx.Request)
 			c.Session().SetWithCookie(ctx.Writer, sessionKey, sessiionValue)
@@ -148,7 +178,11 @@ func SignatureMiddleware(c Core, singular string) gin.HandlerFunc {
 			c.Session().SetWithToken(sessionKey, sessiionValue)
 		}
 		if err != nil {
-			ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
+			if err == session.ERROR_SESSION_ELSE_LOGIN {
+				ctx.JSON(200, errno.ERRNO_AUTH_ELSE_LOGIN.ToMapWithError(err))
+			} else {
+				ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
+			}
 			ctx.Abort()
 			return
 		}

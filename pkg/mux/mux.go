@@ -3,7 +3,7 @@
  * @Params: 可变参数, 可以指定端口号, 服务名称,
  * @Author: LenLee
  * @Date: 2022-06-24 21:59:45
- * @LastEditTime: 2023-09-11 07:10:35
+ * @LastEditTime: 2024-03-27 04:46:10
  * @LastEditors: reel
  * @FilePath:
  */
@@ -28,6 +28,8 @@ import (
 
 var _ Mux = (*httpServer)(nil)
 
+type StartJobFunc func() error
+
 type Mux interface {
 	Name() string
 	Status() int8
@@ -35,17 +37,19 @@ type Mux interface {
 	Stop() error
 	Engine() *gin.Engine
 	SetAddr(addr string)
+	AddStartJobList(...StartJobFunc)
 }
 
 type httpServer struct {
-	name      string
-	status    int8
-	client    httpx.Client
-	server    *http.Server
-	engine    *gin.Engine
-	timeout   time.Duration
-	statusUrl string
-	opt       *opts
+	name         string
+	status       int8
+	client       httpx.Client
+	server       *http.Server
+	engine       *gin.Engine
+	timeout      time.Duration
+	statusUrl    string
+	opt          *opts
+	startJobList []StartJobFunc
 }
 
 func New(optF ...OptFunc) (srv Mux, err error) {
@@ -61,12 +65,13 @@ func New(optF ...OptFunc) (srv Mux, err error) {
 	}
 	engine := gin.New()
 	h := &httpServer{
-		name:      opt.name,
-		client:    httpx.New(),
-		timeout:   opt.timeout,
-		engine:    engine,
-		opt:       opt,
-		statusUrl: "/srv_status",
+		name:         opt.name,
+		client:       httpx.New(),
+		timeout:      opt.timeout,
+		engine:       engine,
+		opt:          opt,
+		statusUrl:    "/srv_status",
+		startJobList: make([]StartJobFunc, 0, 100),
 	}
 	engine.GET(h.statusUrl, func(ctx *gin.Context) { ctx.JSON(200, 1) })
 
@@ -111,12 +116,23 @@ func (h *httpServer) Start() error {
 			return
 		}
 	}()
+	for _, job := range h.startJobList {
+		err = job()
+		if err != nil {
+			return errorx.Wrap(err, fmt.Sprintf("%s发生错误", h.name))
+		}
+	}
 	return errorx.Wrap(err, fmt.Sprintf("%s发生错误", h.name))
 }
 
 func (h *httpServer) Engine() *gin.Engine {
 	return h.engine
 }
+
 func (h *httpServer) SetAddr(addr string) {
 	h.opt.addr = addr
+}
+
+func (h *httpServer) AddStartJobList(jobs ...StartJobFunc) {
+	h.startJobList = append(h.startJobList, jobs...)
 }

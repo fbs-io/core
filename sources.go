@@ -1,10 +1,11 @@
 /*
- * @Author: reel
- * @Date: 2023-06-16 05:57:22
- * @LastEditors: reel
- * @LastEditTime: 2023-09-12 06:52:26
- * @Description: 系统资源model, 用于管理API及菜单
- */
+  - @Author: reel
+  - @Date: 2023-06-16 05:57:22
+
+* @LastEditors: reel
+* @LastEditTime: 2024-03-27 04:44:07
+  - @Description: 系统资源model, 用于管理API及菜单
+*/
 package core
 
 import (
@@ -46,23 +47,23 @@ const (
 //
 // 当使用core中的路由接口生成路由时, 系统资源会自动注册到这张表中
 type SourcesBase struct {
-	Code  string `gorm:"comment:资源代码;uniqueIndex"`           // 资源code
-	Name  string `gorm:"comment:资源名称;index"`                 // 资源名称,
-	Desc  string `gorm:"comment:资源说明"`                       // 资源描述,可用作title
-	PCode string `gorm:"comment:上层资源code;index"`             // 父级code
-	Level int8   `gorm:"comment:资源层级;index"`                 // 层级, 方便定位数据
-	Api   string `gorm:"comment:资源路径;index"`                 // 资源访问api
-	Type  int8   `gorm:"comment:资源类型,0表示都可以显示, 1表示受限;index"` // 用于区分资源类型, 可以设置那些是用做权限配置的
-	Sort  string `gorm:"comment:资源排序"`                       // 前端菜单顺序
+	Code  string `json:"code" gorm:"comment:资源代码;uniqueIndex"`           // 资源code
+	Name  string `json:"name" gorm:"comment:资源名称;index"`                 // 资源名称,
+	Desc  string `json:"desc" gorm:"comment:资源说明"`                       // 资源描述,可用作title
+	PCode string `json:"pcode" gorm:"comment:上层资源code;index"`            // 父级code
+	Level int8   `json:"level" gorm:"comment:资源层级;index"`                // 层级, 方便定位数据
+	Api   string `json:"api" gorm:"comment:资源路径;index"`                  // 资源访问api
+	Type  int8   `json:"type" gorm:"comment:资源类型,0表示都可以显示, 1表示受限;index"` // 用于区分资源类型, 可以设置那些是用做权限配置的
+	Sort  string `json:"sort" gorm:"comment:资源排序"`                       // 前端菜单顺序
 	// API文档用, 请求方法
-	Method     string `gorm:"comment:后台接口方法"`   // api接口路径
-	Params     string `gorm:"comment:前端请求参数"`   // db中存储的参数字符串
-	AcceptType string `gorm:"comment:前端请求参数类型"` // 约束接口传参方式
+	Method     string `json:"method" gorm:"comment:后台接口方法"`        // api接口路径
+	Params     string `json:"params" gorm:"comment:前端请求参数"`        // db中存储的参数字符串
+	AcceptType string `json:"accept_type" gorm:"comment:前端请求参数类型"` // 约束接口传参方式
 	// 前端路由菜单用
-	IsRouter  int8            `gorm:"comment:前端用路由判断;index"`                 // 主要用于某些button需要展示路由上
-	Path      string          `gorm:"comment:前端用路径;index"`                   // 前端用组件方法
-	Component string          `gorm:"comment:组件名称"`                          // 前端组件名称
-	Meta      rdb.ModeMapJson `gorm:"type:varchar(1000);comment:前端用路由参数元信息"` // 前端组件原信息
+	IsRouter  int8            `json:"is_router" gorm:"comment:前端用路由判断;index"`            // 主要用于某些button需要展示路由上
+	Path      string          `json:"path" gorm:"comment:前端用路径;index"`                   // 前端用组件方法
+	Component string          `json:"component" gorm:"comment:组件名称"`                     // 前端组件名称
+	Meta      rdb.ModeMapJson `json:"meta" gorm:"type:varchar(1000);comment:前端用路由参数元信息"` // 前端组件原信息
 }
 
 // 数据库字段
@@ -71,6 +72,7 @@ type SourcesBase struct {
 type Sources struct {
 	SourcesBase
 	rdb.Model
+	Children []*Sources `json:"children" gorm:"-"`
 }
 
 func (s *Sources) TableName() string {
@@ -106,7 +108,9 @@ func (s *Sources) WithPermission(t int8) *Sources {
 		s.Path = ""
 		s.Component = ""
 	case SOURCE_TYPE_UNLIMITED:
-		s.IsRouter = SOURCE_ROUTER_IS
+		if s.Method == "" {
+			s.IsRouter = SOURCE_ROUTER_IS
+		}
 	}
 	return s
 }

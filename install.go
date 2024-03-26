@@ -1,10 +1,10 @@
 /*
- * @Author: reel
- * @Date: 2023-05-16 20:17:56
- * @LastEditors: reel
- * @LastEditTime: 2023-09-12 05:55:32
- * @Description: 系统配置相关操作
- */
+- @Author: reel
+- @Date: 2023-05-16 20:17:56
+- @LastEditors: reel
+- @LastEditTime: 2024-03-19 06:44:10
+- @Description: 系统配置相关操作
+*/
 package core
 
 import (
@@ -115,7 +115,7 @@ func (c *core) installHandler() gin.HandlerFunc {
 			ctx.JSON(200, errno.ERRNO_PARAMS_BIND.ToMapWithError(err))
 			return
 		}
-		data, _ = json.Marshal(c.config)
+		data, err = json.Marshal(c.config)
 		if err != nil {
 			ctx.JSON(200, errno.ERRNO_PARAMS_INVALID.ToMapWithError(err))
 			return

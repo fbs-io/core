@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-28 18:06:12
  * @LastEditors: reel
- * @LastEditTime: 2023-09-14 07:19:53
+ * @LastEditTime: 2024-03-27 04:46:34
  * @Description: 中间件
  */
 package msc
@@ -29,7 +29,7 @@ func (m *handler) cors() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		method := ctx.Request.Method
 		origin := ctx.Request.Header.Get("Origin") //请求头部
-		if origin != "" {
+		if origin != "" && !strings.Contains(ctx.FullPath(), "website") {
 			//接收客户端发送的origin （重要！）
 			ctx.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			ctx.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -87,7 +87,7 @@ var allowPath = map[string]bool{
 	"/msc/ajax/login":   true,
 	"/msc/ajax/install": true,
 	"/":                 true,
-	"/mscui":            true,
+	"":                  true,
 }
 
 const (
@@ -98,7 +98,7 @@ const (
 // 如果没有登陆, 则会给一个默认的签名
 func (m *handler) signature() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		if ctx.Request.RequestURI == `/mscui/config.js` && !m.config.IsLoad {
+		if ctx.Request.RequestURI == `/website/config.js` && !m.config.IsLoad {
 			ctx.Header("Content-Type", "application/javascript")
 			ctx.String(200, initConfig)
 			ctx.Abort()
@@ -113,7 +113,7 @@ func (m *handler) signature() gin.HandlerFunc {
 			ctx.Next()
 			return
 		}
-		if strings.Contains(ctx.Request.RequestURI, "/mscui/") {
+		if strings.Contains(ctx.Request.RequestURI, "/website/") {
 			ctx.Next()
 			return
 		}

@@ -2,7 +2,7 @@
 		<header class="adminui-header">
 			<div class="adminui-header-left">
 				<div class="logo-bar">
-					<img class="logo" src="/img/logo.png">
+					<img class="logo" src="/website/img/logo.png">
 					<span>{{ $CONFIG.APP_NAME }}</span>
 				</div>
 				<!-- <div v-if="!ismobile" style="width: 5rem;">

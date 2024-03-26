@@ -2,9 +2,13 @@
  * @Author: reel
  * @Date: 2023-06-16 06:04:12
  * @LastEditors: reel
- * @LastEditTime: 2023-09-01 06:12:18
+<<<<<<< HEAD
+ * @LastEditTime: 2024-03-27 04:49:14
+=======
+ * @LastEditTime: 2024-01-15 22:38:34
+>>>>>>> develop
  * @Description: 定义常用的模型用于快速开发
- */
+*/
 
 package rdb
 
@@ -14,19 +18,20 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/fbs-io/core/pkg/consts"
 	"gorm.io/gorm"
 )
 
 // 通用的字段处理
 type Model struct {
-	ID        uint   `json:"id" gorm:"primaryKey;"`                  // id
-	CreatedAT uint   `json:"created_at" gorm:"autoCreateTime:milli"` // 创建时间
-	CreatedBy string `json:"created_by"`                             // 创建人
-	UpdatedAT uint   `json:"updated_at" gorm:"autoUpdateTime:milli"` // 修改时间
-	UpdatedBy string `json:"updated_by"`                             // 修改人
-	DeletedAT uint   `json:"deleted_at" gorm:"index"`                // 删除时间
-	DeletedBy string `json:"deleted_by"`                             // 删除人
-	Status    int8   `json:"status" gorm:"index;comment:状态"`         // 是否启用 1 表示启用 -1表示失效
+	ID        uint      `json:"id" gorm:"primaryKey;"`                    // id
+	CreatedAT uint      `json:"created_at" gorm:"autoCreateTime:milli"`   // 创建时间
+	CreatedBy string    `json:"created_by"`                               // 创建人
+	UpdatedAT uint      `json:"updated_at" gorm:"autoUpdateTime:milli"`   // 修改时间
+	UpdatedBy string    `json:"updated_by"`                               // 修改人
+	DeletedAT DeletedAt `json:"deleted_at" gorm:"index;softDelete:milli"` // 删除时间
+	DeletedBy string    `json:"deleted_by"`                               // 删除人
+	Status    int8      `json:"status" gorm:"index;comment:状态;default:1"` // 是否启用 1 表示启用 -1表示失效
 }
 
 // 通用查询查询字段处理
@@ -35,31 +40,28 @@ type ModelQuery struct {
 	Status int8 `json:"status"`
 }
 
+func (m *Model) getAuth(tx *gorm.DB) string {
+	auth, ok := tx.Get(consts.CTX_AUTH)
+	if ok {
+		return auth.(string)
+	}
+	return ""
+}
 func (m *Model) BeforeCreate(tx *gorm.DB) error {
 	m.Status = 1
-	auth, ok := tx.Get("auth")
-	if ok {
-		m.CreatedBy = auth.(string)
-	}
+	m.CreatedBy = m.getAuth(tx)
 	return nil
 }
 
 func (m *Model) BeforeUpdate(tx *gorm.DB) error {
-	auth, ok := tx.Get("auth")
-	if ok {
-		m.UpdatedBy = auth.(string)
-	}
+	m.UpdatedBy = m.getAuth(tx)
 	return nil
 }
 
-func (m *Model) BeforeDelete(tx *gorm.DB) error {
-	auth, ok := tx.Get("auth")
-	if ok {
-		m.DeletedBy = auth.(string)
-	}
-
-	return nil
-}
+// func (m *Model) BeforeDelete(tx *gorm.DB) error {
+// 	m.DeletedBy = m.getAuth(tx)
+// 	return nil
+// }
 
 type ModeMapJson map[string]interface{}
 
@@ -107,4 +109,78 @@ func (j ModeListJson) Value() (driver.Value, error) {
 	}
 	b, err := json.Marshal(j)
 	return string(b), err
+}
+
+// 定义分区字段
+// 用于表分区使用
+type ShardingModel struct {
+	ShadingKey string `json:"-" gorm:"column:sk;index;comment:分区"`
+}
+
+func (m *ShardingModel) TableName(table string) string {
+	if m.ShadingKey == "" {
+		return table
+	}
+	return fmt.Sprintf("%s_%s", table, m.ShadingKey)
+}
+
+func (m *ShardingModel) txSharding(tx *gorm.DB) *gorm.DB {
+	sk, ok := tx.Get(consts.CTX_SHARDING_KEY)
+	if ok {
+		m.ShadingKey = sk.(string)
+	}
+	tableI, ok := tx.Get(TX_SHADING_TABLE_KEY)
+	if ok && tableI != nil {
+		tableList, _ := tableI.(map[string][]string)
+		model, _ := tx.Get(TX_SHADING_MODEL_KEY)
+		table := tx.Statement.Table
+		if model.(int8) == SHADING_MODEL_TABLE && tableList[table] != nil {
+			tx.Statement.Table = m.TableName(table)
+		}
+	}
+	return tx
+}
+
+func (m *ShardingModel) BeforeCreate(tx *gorm.DB) error {
+	m.txSharding(tx)
+	return nil
+}
+
+func (m *ShardingModel) BeforeUpdate(tx *gorm.DB) error {
+	m.txSharding(tx)
+	return nil
+}
+func (m *ShardingModel) BeforeDelete(tx *gorm.DB) error {
+	m.txSharding(tx)
+	return nil
+}
+
+// 定义数据权限模型
+// 用于有数据权限需求的查询, 创建等, 和分区表的原理类似, 但不涉及到分表操作
+// 适用于string类型的数据
+type DataPermissionStringModel struct {
+	DataPermission string `json:"-" gorm:"column:dp;index;comment:数据权限"`
+}
+
+type DataPermissionStringCtx struct {
+	DataPermissionType  int8 //
+	DataPermission      string
+	DataPermissionScope []string
+}
+
+// 定义数据权限模型
+// 用于有数据权限需求的查询, 创建等, 和分区表的原理类似, 但不涉及到分表操作
+// 适用于int类型的数据
+type DataPermissionIntModel struct {
+	DataPermission int64 `json:"-" gorm:"column:dp;index;comment:数据权限"`
+}
+
+type DataPermissionIntCtx struct {
+	DataPermissionType  int8 //
+	DataPermission      int64
+	DataPermissionScope []int64
+}
+
+type DeleteParams struct {
+	ID []uint `json:"id" binding:"required" conditions:"-"`
 }
