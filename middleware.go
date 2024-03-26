@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2024-03-27 04:43:08
+ * @LastEditTime: 2024-03-27 05:54:30
  * @Description: 常用的中间件
  */
 package core
@@ -86,6 +86,9 @@ func LogMiddleware(c Core) gin.HandlerFunc {
 					logx.F("req_url", ctx.Request.RequestURI),
 					logx.F("error", fmt.Sprintf("%v", err)),
 				)
+				ctx.JSON(200, errno.ERRNO_SYSTEM.ToMapWithError(errorx.Errorf("%v", err)))
+				ctx.Abort()
+				return
 			}
 
 		}()
