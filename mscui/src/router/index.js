@@ -47,7 +47,7 @@ router.beforeEach(async (to, from, next) => {
 		//删除路由(替换当前layout路由)
 		router.addRoute(routes[0])
 		//删除路由(404)
-		// routes_404_r()
+		routes_404_r()
 		isGetRouter = false;
 		next();
 		return false;
@@ -69,7 +69,6 @@ router.beforeEach(async (to, from, next) => {
 		});
 		return false;
 	}
-	console.log("to.matched",to.matched)
 	//整页路由处理
 	if(to.meta.fullpage){
 		to.matched = [to.matched[to.matched.length-1]]
