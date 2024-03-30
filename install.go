@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2024-03-19 06:44:10
+ * @LastEditTime: 2024-03-30 09:32:14
  * @Description: 系统配置相关操作
  */
 package core
@@ -132,6 +132,7 @@ func (c *core) installHandler() gin.HandlerFunc {
 		}
 		if err := service.Start(); err != nil {
 			c.config.IsLoad = false
+			service.Stop()
 			ctx.JSON(200, errno.ERRNO_PARAMS_INVALID.ToMapWithError(err))
 			return
 		}

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 21:09:14
  * @LastEditors: reel
- * @LastEditTime: 2023-09-09 20:55:19
+ * @LastEditTime: 2024-03-30 09:40:07
  * @Description: 请填写简介
  */
 package service
@@ -47,29 +47,45 @@ func Append(service Service) {
 }
 
 func Start() error {
+	serviceName := ""
+	defer func() {
+		err := recover()
+		if err != nil {
+			logx.Sys.Info(fmt.Sprintf("[%s]服务启动过程中发生位置错误: %v", serviceName, err))
+		}
+	}()
 	for _, s := range services {
 		time.Sleep(1 * time.Second)
-		logx.Sys.Info(fmt.Sprintf("[%s]服务开始启动: ", s.Name()))
+		serviceName = s.Name()
+		logx.Sys.Info(fmt.Sprintf("[%s]服务开始启动: ", serviceName))
 		err := s.Start()
 		if err != nil {
-			logx.Sys.Error(fmt.Sprintf("[%s]服务启动发生错误: ", s.Name()), logx.E(err))
-			return errorx.Wrap(err, fmt.Sprintf("[%s]服务启动失败", s.Name()))
+			logx.Sys.Error(fmt.Sprintf("[%s]服务启动发生错误: ", serviceName), logx.E(err))
+			return errorx.Wrap(err, fmt.Sprintf("[%s]服务启动失败", serviceName))
 		}
-		logx.Sys.Info(fmt.Sprintf("[%s]服务完成启动: ", s.Name()))
+		logx.Sys.Info(fmt.Sprintf("[%s]服务完成启动: ", serviceName))
 	}
 	return nil
 }
 
 func Stop() error {
+	serviceName := ""
+	defer func() {
+		err := recover()
+		if err != nil {
+			logx.Sys.Info(fmt.Sprintf("[%s]服务关闭过程中发生位置错误: %v", serviceName, err))
+		}
+	}()
 	for _, s := range services {
 		time.Sleep(1 * time.Second)
 		err := s.Stop()
-		logx.Sys.Info(fmt.Sprintf("[%s]服务开始关闭: ", s.Name()))
+		serviceName = s.Name()
+		logx.Sys.Info(fmt.Sprintf("[%s]服务开始关闭: ", serviceName))
 		if err != nil {
-			logx.Sys.Info(fmt.Sprintf("[%s]服务关闭发生错误: ", s.Name()), logx.E(err))
-			return errorx.Wrap(err, fmt.Sprintf("[%s]服务关闭失败", s.Name()))
+			logx.Sys.Info(fmt.Sprintf("[%s]服务关闭发生错误: ", serviceName), logx.E(err))
+			return errorx.Wrap(err, fmt.Sprintf("[%s]服务关闭失败", serviceName))
 		}
-		logx.Sys.Info(fmt.Sprintf("[%s]服务完成关闭: ", s.Name()))
+		logx.Sys.Info(fmt.Sprintf("[%s]服务完成关闭: ", serviceName))
 	}
 	return nil
 }

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2024-03-17 11:26:07
+ * @LastEditTime: 2024-03-30 10:04:34
  * @Description: 关系数据库配置
  */
 package rdb
@@ -184,6 +184,9 @@ func (store *rdbStore) Status() int8 {
 }
 
 func (store *rdbStore) Stop() error {
+	if store.db != nil {
+		return nil
+	}
 	sqlDB, err := store.db.DB()
 	if err != nil {
 		return err

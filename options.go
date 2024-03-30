@@ -2,15 +2,16 @@
  * @Author: reel
  * @Date: 2023-07-23 22:01:29
  * @LastEditors: reel
- * @LastEditTime: 2023-07-23 22:07:40
+ * @LastEditTime: 2024-03-28 06:08:14
  * @Description: 初始化core配置
  */
 
 package core
 
 type options struct {
-	limitSize   int // 最多存储的令牌个数
-	limitNumber int // 每秒生成的令牌个数
+	limitSize   int    // 最多存储的令牌个数
+	limitNumber int    // 每秒生成的令牌个数
+	appName     string // 设置应用名称
 }
 
 type FuncCores func(*options)
@@ -26,5 +27,11 @@ func SetLimitSize(limitSize int) FuncCores {
 func SetLimitNumber(limitNumber int) FuncCores {
 	return func(opt *options) {
 		opt.limitNumber = limitNumber
+	}
+}
+
+func SetAppName(appName string) FuncCores {
+	return func(opt *options) {
+		opt.appName = appName
 	}
 }

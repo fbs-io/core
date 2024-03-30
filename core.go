@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2024-03-17 16:01:15
+ * @LastEditTime: 2024-03-28 06:10:47
  * @Description: 管理核心组件的启动和运行
  */
 package core
@@ -89,7 +89,9 @@ func New(funcs ...FuncCores) (Core, error) {
 		fs(opt)
 	}
 
+	env.SetAppName(opt.appName)
 	env.Init()
+
 	gin.SetMode(env.Active().Mode())
 	dms, err := mux.New(
 		mux.SetHost(env.Active().MscAddr()),

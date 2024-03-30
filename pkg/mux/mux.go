@@ -3,7 +3,7 @@
  * @Params: 可变参数, 可以指定端口号, 服务名称,
  * @Author: LenLee
  * @Date: 2022-06-24 21:59:45
- * @LastEditTime: 2024-03-17 16:18:55
+ * @LastEditTime: 2024-03-30 10:18:00
  * @LastEditors: reel
  * @FilePath:
  */
@@ -97,6 +97,9 @@ func (h *httpServer) Status() int8 {
 	return consts.SERVER_IS_DOWN
 }
 func (h *httpServer) Stop() error {
+	if h.Status() != consts.SERVER_IS_RUN {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), h.timeout)
 	defer cancel()
 	return h.server.Shutdown(ctx)
