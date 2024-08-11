@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 06:04:12
  * @LastEditors: reel
- * @LastEditTime: 2024-01-15 22:38:34
+ * @LastEditTime: 2024-07-07 18:52:14
  * @Description: 定义常用的模型用于快速开发
  */
 
@@ -178,5 +178,18 @@ type DataPermissionIntCtx struct {
 }
 
 type DeleteParams struct {
-	ID []uint `json:"id" binding:"required" conditions:"-"`
+	ID []uint `json:"id" binding:"required" conditions:"in"`
+}
+
+type ModelIF interface {
+	GetID() uint
+	GetStatus() int8
+}
+
+func (m *Model) GetID() uint {
+	return m.ID
+}
+
+func (m *Model) GetStatus() int8 {
+	return m.Status
 }

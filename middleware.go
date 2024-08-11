@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2024-03-27 05:41:32
+ * @LastEditTime: 2024-06-02 10:18:27
  * @Description: 常用的中间件
  */
 package core
@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -84,7 +85,7 @@ func LogMiddleware(c Core) gin.HandlerFunc {
 					logx.F("client_ip", ctx.ClientIP()),
 					logx.F("req_method", ctx.Request.Method),
 					logx.F("req_url", ctx.Request.RequestURI),
-					logx.F("error", fmt.Sprintf("%v", err)),
+					logx.F("error", fmt.Sprintf("msg: %v, stack: %s", err, string(debug.Stack()))),
 				)
 				ctx.JSON(200, errno.ERRNO_SYSTEM.ToMapWithError(errorx.Errorf("%v", err)))
 				ctx.Abort()

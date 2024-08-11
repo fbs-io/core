@@ -2,12 +2,14 @@
  * @Author: reel
  * @Date: 2023-05-16 07:50:35
  * @LastEditors: reel
- * @LastEditTime: 2023-09-25 21:33:48
+ * @LastEditTime: 2024-05-11 12:21:19
  * @Description: 请填写简介
  */
 package cache
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"time"
@@ -42,6 +44,8 @@ type Store interface {
 	SetConfig(funcs ...dsn.DsnFunc) (err error)
 	SetIndex(indexName, index string, fs ...func(a string, b string) bool) error
 	GetByIndex(indexName string, iterator func(key string, value string) bool) error
+	GetWithObj(key string, obj interface{}) error
+	SetWithObj(key string, obj interface{}, funcs ...OptFunc) error
 }
 
 var _ Store = (*cacheStore)(nil)
@@ -178,4 +182,22 @@ func (c *cacheStore) GetByIndex(indexName string, iterator func(key string, valu
 		return tx.Ascend(indexName, iterator)
 	})
 
+}
+
+// 设置对象缓存, 基于set方法增加json序列化方法
+func (c *cacheStore) SetWithObj(key string, obj interface{}, funcs ...OptFunc) error {
+	vb, err := json.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	return c.Set(key, string(vb), funcs...)
+}
+
+// 获取缓存对象, 需要传入对象指针
+func (c *cacheStore) GetWithObj(key string, obj interface{}) error {
+	vbs := c.Get(key)
+	if vbs == "" {
+		return errors.New("没有缓存数据")
+	}
+	return json.Unmarshal([]byte(vbs), obj)
 }

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 06:55:41
  * @LastEditors: reel
- * @LastEditTime: 2024-01-14 17:39:59
+ * @LastEditTime: 2024-07-07 13:50:05
  * @Description: 根据条件结构体, 自动构建查询语句, 并返回gorm.DB, 用于扩展
  */
 package rdb
@@ -36,7 +36,7 @@ type Condition struct {
 	Columns     string
 	TableName   string
 	Orders      string
-	Where       map[string]interface{}
+	Where       map[string]reflect.Value
 	QryDelete   bool
 	IsSharding  bool
 	ShardingKey string
@@ -46,42 +46,8 @@ func NewCondition() *Condition {
 	return &Condition{
 		PageSize:   10,
 		PageNumber: 0,
-		Where:      make(map[string]interface{}, 0),
+		Where:      make(map[string]reflect.Value, 0),
 	}
-}
-
-// 通过传入条件, 自动完成gorm的语句生成
-//
-// 此方法适用于表中有ID(主键)的字段, 优化了翻页查询性能
-func (store *rdbStore) BuildQueryWihtSubQryID(cb *Condition) (tx *gorm.DB) {
-	tx = store.db
-	sub := store.db
-	for k, v := range cb.Where {
-		sub = sub.Where(k, v)
-	}
-
-	// 限定最大获取输了
-	if cb.PageSize > 1000 {
-		cb.PageSize = 1000
-	}
-	// 限定最大获取输了
-	cb.PageNumber = cb.PageNumber - 1
-	if cb.PageNumber < 0 {
-		cb.PageNumber = 0
-	}
-	// 子查询用于快速分页查询
-	sub = sub.Table(cb.TableName).Select("id as subid")
-	if cb.Orders != "" {
-		sub = sub.Order(cb.Orders)
-	}
-	sub = sub.Limit(cb.PageSize).Offset(cb.PageNumber * cb.PageSize)
-	tx = tx.Table(cb.TableName).Joins("join ( ? ) t1 on t1.subid = id", sub)
-
-	// 设置查询的名称
-	if cb.Columns != "" {
-		tx = tx.Select(cb.Columns)
-	}
-	return tx
 }
 
 // 通过传入条件, 自动完成gorm的语句生成
@@ -89,8 +55,20 @@ func (store *rdbStore) BuildQueryWihtSubQryID(cb *Condition) (tx *gorm.DB) {
 // 不适用于大表的翻页查询, 大表查询请优化表结构
 func (store *rdbStore) BuildQuery(cb *Condition) (tx *gorm.DB) {
 	tx = store.DB()
-	for k, v := range cb.Where {
-		tx = tx.Where(k, v)
+	for key, value := range cb.Where {
+		values := make([]interface{}, 0, 100)
+		switch value.Kind() {
+		// 对切片处理
+		case reflect.Slice:
+			for i := 0; i < value.Len(); i++ {
+				val := value.Index(i)
+				values = append(values, val.Interface())
+			}
+			tx = tx.Where(key, values)
+		default:
+			tx = tx.Where(key, value.Interface())
+
+		}
 	}
 
 	// 限定最大获取输了
@@ -155,7 +133,6 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 		case "coloums":
 			cb.Columns = valueType.String()
 		default:
-			value := valueType.Interface()
 			ckey := "%s %s"
 
 			// 处理查询在某个范围, 如 1< age <10
@@ -168,6 +145,8 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 			if condition == "-" {
 				continue
 			}
+
+			// 对模糊查询的单独处理
 			switch condition {
 			// 条件为空, 默认是等于
 			case "":
@@ -177,18 +156,18 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 				condition = "not in (?)"
 			case like:
 				condition = "like (?)"
-				value = fmt.Sprintf("%%%v%%", value)
+				valueType.SetString(fmt.Sprintf("%%%v%%", valueType.Interface()))
 			case likeLeft:
 				condition = "like (?)"
-				value = fmt.Sprintf("%%%v", value)
+				valueType.SetString(fmt.Sprintf("%%%v", valueType.Interface()))
 			case likeRight:
 				condition = "like (?)"
-				value = fmt.Sprintf("%v%%", value)
+				valueType.SetString(fmt.Sprintf("%v%%", valueType.Interface()))
 			default:
 				condition = fmt.Sprintf("%s (?)", condition)
 			}
 
-			cb.Where[fmt.Sprintf(ckey, key, condition)] = value
+			cb.Where[fmt.Sprintf(ckey, key, condition)] = valueType
 		}
 	}
 	return cb

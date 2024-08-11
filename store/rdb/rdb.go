@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2024-03-30 10:04:34
+ * @LastEditTime: 2024-08-10 15:34:00
  * @Description: 关系数据库配置
  */
 package rdb
@@ -92,11 +92,6 @@ type Store interface {
 	// 大多数查询通过使用该方法即可
 	BuildQueryWithParams(params reflect.Value) *gorm.DB
 
-	// 通过参数反射值构建普通查询tx用于应用端使用
-	//
-	// 此方法适用于表中有ID(主键)的字段, 优化了翻页查询性能
-	BuildQueryWihtSubQryID(cb *Condition) (tx *gorm.DB)
-
 	// 设置分区模式
 	//
 	// SHADING_MODEL_NOT : 不分区, 默认值, 数据都在一张表中,
@@ -122,8 +117,14 @@ type Store interface {
 	// 添加启动前的前置执行程序
 	AddMigrateList(fs ...func() error)
 
-	//添加分区后缀, 同时会重置表分区,自动迁移新增表分区的结构
+	// 添加分区后缀, 同时会重置表分区,自动迁移新增表分区的结构
 	AddShardingSuffixs(suffixs string) (err error)
+
+	// 增加分区
+	AddShardingSuffixsWithTX(tx *gorm.DB, suffixs string) (err error)
+
+	// 获取分区DB链接
+	GetShardingDB(shardingKey string) *gorm.DB
 }
 
 var _ Store = (*rdbStore)(nil)
@@ -304,6 +305,8 @@ func (store *rdbStore) CreateInBatches(ts interface{}) (err error) {
 
 type RegisterFunc func() error
 
+type TransactionFunc func(tx *gorm.DB) (err error)
+
 func IsUniqueError(err error) (ok bool) {
 	return strings.Contains(err.Error(), "UNIQUE constraint failed:")
 }
@@ -370,10 +373,19 @@ func GetShardingKey(tx *gorm.DB) (sk string) {
 	return
 }
 
+// 复制一个新的gorm.DB并设置上下文
 func CopyCtx(oldTx, newTx *gorm.DB) {
 	oldTx.Statement.Settings.Range(func(key, value any) bool {
 		newTx.Set(key.(string), value)
 		return true
 	})
 
+}
+
+// 获取分区DB链接
+func (store *rdbStore) GetShardingDB(shardingKey string) *gorm.DB {
+	if shardingKey == "" || store.dbPool[shardingKey] == nil {
+		return store.db
+	}
+	return store.dbPool[shardingKey]
 }

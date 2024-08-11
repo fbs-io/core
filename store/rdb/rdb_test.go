@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-20 07:03:06
  * @LastEditors: reel
- * @LastEditTime: 2023-09-05 19:26:19
+ * @LastEditTime: 2024-07-07 20:47:56
  * @Description: 测试通过条件结构体自动完成查询条件的设置
  */
 package rdb
@@ -82,8 +82,8 @@ func TestCondition(t *testing.T) {
 		PageNumber: 0,
 		Columns:    "org_code",
 		Orders:     "org_code",
-		Where: map[string]interface{}{
-			"org_code like (?)": []string{"002"},
+		Where: map[string]reflect.Value{
+			"org_code like (?)": reflect.ValueOf([]string{"002"}),
 		},
 	}
 	// 测试根据参数反射类型自动生成参数

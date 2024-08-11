@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2024-03-30 09:32:14
+ * @LastEditTime: 2024-07-07 20:48:18
  * @Description: 系统配置相关操作
  */
 package core
@@ -75,8 +75,8 @@ func (c *core) install() (err error) {
 	}
 
 	// 把资源map转成list, 初始化写入资源列表
-	s := &Sources{}
-	c.rdb.Register(s, func() error { return c.rdb.DB().Table(s.TableName()).CreateInBatches(sources, len(sources)).Error })
+	s := &Resources{}
+	c.rdb.Register(s, func() error { return c.rdb.DB().Table(s.TableName()).CreateInBatches(resources, len(resources)).Error })
 
 	service.Append(c.rdb)
 	logx.Sys.Info("完成数据库配置")

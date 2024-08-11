@@ -2,12 +2,14 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2024-03-21 06:42:44
+ * @LastEditTime: 2024-08-11 12:14:50
  * @Description: 基于gin的上下文进行封装
  */
 package core
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -16,6 +18,7 @@ import (
 
 	"github.com/fbs-io/core/pkg/consts"
 	"github.com/fbs-io/core/pkg/errno"
+	"github.com/fbs-io/core/store/cache"
 	"github.com/fbs-io/core/store/rdb"
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -101,14 +104,15 @@ type Context interface {
 	// Request 获取 Request 对象
 	Request() *http.Request
 
-	// Method 获取 Request.Method
-	Method() string
+	// URI 获取 unescape 后的 Request.URL.RequestURI()
+	URI() string
 	// Host 获取 Request.Host
 	Host() string
 	// Path 获取 请求的路径 Request.URL.Path (不附带 querystring)
 	Path() string
-	// URI 获取 unescape 后的 Request.URL.RequestURI()
-	URI() string
+	// Method 获取 Request.Method
+	Method() string
+
 	// resource 获取 请求方式和全路径拼接好的字符串
 	// 如GET:/api/v1/userlist
 	Resource() string
@@ -116,29 +120,57 @@ type Context interface {
 	// 终止并返回信息
 	AbortWithError(interface{})
 
+	// gin的next方法
+	Next()
+
+	// 上下文相关
+	Ctx() *gin.Context
+
+	// 获取上下文的core
+	Core() Core
+
+	// 获取上下文中的用户
+	Auth() string
+
+	// 获取上下文中的分区
+	ShardingKey() (sk string)
+
+	// 获取接口的参数
+	CtxGetParams() any
+
+	// gin上下文设置
 	// CtxGet 获取上下文自定义的一些参数
 	CtxGet(key string) interface{}
 
 	// 设置自定义参数在上下文中
 	CtxSet(key string, v interface{})
 
-	// 获取二次封装的参数
-	CtxGetParams() any
-
-	Next()
-
-	Ctx() *gin.Context
-
 	// 返回通过参数构建好查询参数参数的gorm.DB
 	TX(optFunc ...TxOptsFunc) *gorm.DB
 
-	Core() Core
-
-	// 获取用户
-	Auth() string
-
-	// 生成新的db查询
+	// 生成新的db查询,不含参数及预置的sql条件
 	NewTX(optFunc ...TxOptsFunc) *gorm.DB
+
+	// 生成带有子查询的db对象
+	SubQueryTX() *gorm.DB
+
+	// 设置缓存, 增加分区处理逻辑
+	CacheSet(key, value string, funcs ...cache.OptFunc) error
+
+	// 获取缓存, 按分区获取
+	CacheGet(key string) string
+
+	// 按分区删除缓存
+	CacheDelete(key string) error
+
+	// 设置缓存对象, 增加分区处理逻辑
+	CacheSetWithObj(key string, value interface{}, funcs ...cache.OptFunc) error
+
+	//获取缓存对象, 按分区获取
+	CacheGetWithObj(key string, result interface{}) error
+
+	// 获取分区DB对象, 用于事物处理
+	ShardingTx() *gorm.DB
 }
 
 var _ Context = (*context)(nil)
@@ -401,11 +433,85 @@ func (c *context) Auth() (auth string) {
 	return authI.(string)
 }
 
+// 只保留上下文参数的db对象
 func (ctx *context) NewTX(optFunc ...TxOptsFunc) *gorm.DB {
 	tx := ctx.Core().RDB().DB().Where("1=1")
 
 	for k, v := range ctx.ctx.Copy().Keys {
-		tx.Set(k, v)
+		tx = tx.Set(k, v)
 	}
+	return tx
+}
+
+// 返回子查询的db对象
+func (ctx *context) SubQueryTX() *gorm.DB {
+	return ctx.TX(
+		SetTxMode(TX_QRY_MODE_SUBID),
+	)
+}
+
+func (ctx *context) ShardingKey() (sk string) {
+	skI, ok := ctx.ctx.Get(CTX_SHARDING_KEY)
+	if !ok {
+		return
+	}
+	return skI.(string)
+}
+
+// 设置分区缓存
+func (ctx *context) CacheSet(key, value string, funcs ...cache.OptFunc) error {
+	sk := ctx.ShardingKey()
+	return ctx.core.Cache().Set(fmt.Sprintf("%s::%s", key, sk), value, funcs...)
+}
+
+// 获取分区缓存时
+func (ctx *context) CacheGet(key string) string {
+	sk := ctx.ShardingKey()
+	return ctx.core.Cache().Get(fmt.Sprintf("%s::%s", key, sk))
+}
+
+// 设置分区缓存对象
+func (ctx *context) CacheSetWithObj(key string, value interface{}, funcs ...cache.OptFunc) error {
+	sk := ctx.ShardingKey()
+	vb, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	return ctx.core.Cache().Set(fmt.Sprintf("%s::%s", key, sk), string(vb), funcs...)
+}
+
+// 获取分区缓存对象
+// 根据key获取单个对象
+func (ctx *context) CacheGetWithObj(key string, res interface{}) error {
+	sk := ctx.ShardingKey()
+	vbs := ctx.core.Cache().Get(fmt.Sprintf("%s::%s", key, sk))
+	if vbs == "" {
+		return errors.New("没有缓存数据")
+	}
+	return json.Unmarshal([]byte(vbs), res)
+}
+
+// 删除缓存
+//
+// 根据分区进行删除
+func (ctx *context) CacheDelete(key string) error {
+	sk := ctx.ShardingKey()
+	key = fmt.Sprintf("%s::%s", key, sk)
+
+	return ctx.core.Cache().Del(key)
+}
+
+// 获取分区gorm对象
+//
+// 主要用于事物处理, 正常增删改查可不用该方法
+//
+// 无上下文的自动处理的查询参数
+func (ctx *context) ShardingTx() *gorm.DB {
+	tx := ctx.core.RDB().GetShardingDB(ctx.ShardingKey())
+	tx = tx.Where("1=1")
+	for k, v := range ctx.ctx.Copy().Keys {
+		tx = tx.Set(k, v)
+	}
+	tx = tx.Set(consts.CTX_SHARDING_DB, ctx.ShardingKey())
 	return tx
 }

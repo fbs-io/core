@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-19 23:18:19
  * @LastEditors: reel
- * @LastEditTime: 2023-09-05 19:26:43
+ * @LastEditTime: 2024-07-07 20:49:00
  * @Description: 测试路由相关方法
  */
 
@@ -25,14 +25,14 @@ func TestRouter(t *testing.T) {
 		OrgParentCode string `json:"org_parent_code" default:""  desc:"组织上级 code"`
 	}
 	rt := reflect.TypeOf(OrgCreateRequest{})
-	fmt.Println(genSourcesParams(rt))
-	fmt.Println(genSourcesParams(nil))
+	fmt.Println(genResourcesParams(rt))
+	fmt.Println(genResourcesParams(nil))
 
 	// 生产资源数据测试
 	rout := &router{
 		group: gin.New().Group("api"),
 	}
-	source := rout.genSources("api", "api", "")
+	source := rout.genResources("api", "api", "")
 	fmt.Println(source)
 
 	// 模拟使用时生成资源表测试
@@ -44,7 +44,7 @@ func TestRouter(t *testing.T) {
 	org.PUT("list", "查询组织列表", OrgCreateRequest{}, func(ctx Context) {})
 	org.DELETE("list", "查询组织列表", OrgCreateRequest{}, func(ctx Context) {})
 
-	for _, s := range sourcesMap {
+	for _, s := range resourcesMap {
 		fmt.Println(s)
 
 	}

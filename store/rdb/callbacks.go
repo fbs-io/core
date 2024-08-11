@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2024-01-20 14:13:22
+ * @LastEditTime: 2024-08-11 17:47:05
  * @Description: 回掉函数
  */
 package rdb
@@ -18,11 +18,6 @@ import (
 
 // TODO: 增加链路追踪
 func (store *rdbStore) registerCallbacks() {
-	// store.db.Callback().Query().Before("*").Register("subQuery", store.subQuery)
-	// store.db.Callback().Row().Before("*").Register("subQuery", store.subQuery)
-	// store.db.Callback().Raw().Before("*").Register("subQuery", store.subQuery)
-	// store.db.Callback().Create().Before("*").Register("creates", store.setCreatesCallback)
-	// store.db.Callback().Update().Before("*").Register("updates", store.setUpdatesCallback)
 }
 
 // 目前只要用于表内分区和多表分区模式
@@ -38,7 +33,10 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	if tx.Statement.Schema == nil {
 		return
 	}
-
+	var (
+		sks   string
+		skDBs string
+	)
 	sub := store.buildSubQuery(tx)
 	store.dataPermissonCallback(tx, sub)
 
@@ -47,10 +45,17 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	if !store.shardingAllTable[table] {
 		return
 	}
-	// 分区字段不存在,不再查询
+	// 分区字段不存在,不再处理
 	sk, ok := tx.Get(consts.CTX_SHARDING_KEY)
 	if !ok || sk.(string) == "" {
 		return
+	}
+	sks = sk.(string)
+
+	// 分区数据库标识
+	skDB, ok := tx.Get(consts.CTX_SHARDING_DB)
+	if ok {
+		skDBs = skDB.(string)
 	}
 	// // 如果子查询, 则不再重复生成查询条件
 	// columnI, ok := tx.Get(TX_SUB_QUERY_COLUMN_KEY)
@@ -87,7 +92,7 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 			}
 		case SHADING_MODEL_DB:
 			db := store.dbPool[sk.(string)]
-			if db != nil {
+			if db != nil && sks != skDBs {
 				tx.Statement.ConnPool = db.Config.ConnPool
 				if sub != nil {
 					sub.Statement.ConnPool = db.Config.ConnPool
@@ -95,60 +100,9 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 			}
 		default:
 		}
-		// store.subQuery(tx)
 	}
-	// fmt.Println(tx.Statement.ConnPool)
-	// fmt.Println(sub.Statement.ConnPool)
-	// store.dataPermissonCallback(tx, nil)
+
 }
-
-// 子查询, 用于分页,由子查询的字段和构建条件时,可以设置子查询
-// 可以自定义子查询主键字段,
-// func (store *rdbStore) subQuery(tx *gorm.DB) {
-// 	cbI, ok := tx.Get(TX_CONDITION_BUILD_KEY)
-// 	if !ok || cbI == nil {
-// 		return
-// 	}
-// 	columnI, ok := tx.Get(TX_SUB_QUERY_COLUMN_KEY)
-// 	if columnI == nil || !ok {
-// 		return
-// 	}
-
-// 	table := tx.Statement.Table
-// 	col := columnI.(string)
-// 	cb := cbI.(*Condition)
-// 	sub := rdb.BuildQuery(cb).Table(table)
-// 	subColumns := fmt.Sprintf("sub%s", col)
-// 	sub = sub.Select(fmt.Sprintf("%s as %s ", col, subColumns))
-// 	// 用于分区
-// 	if tx.Statement.Schema.FieldsByName["ShadingKey"] != nil && store.shardingTable[table] == nil {
-// 		sk, _ := tx.Get(consts.CTX_SHARDING_KEY)
-// 		sub = sub.Where("sk = ? ", sk)
-// 	}
-// 	if store.shardingModel == SHADING_MODEL_DB && store.shardingAllTable[tx.Statement.Table] {
-// 		// TODO 完善DB逻辑
-// 		sk, ok := tx.Get(consts.CTX_SHARDING_KEY)
-// 		if !ok || sk.(string) == "" {
-// 			return
-// 		}
-// 		fmt.Println(sk)
-// 		db := store.dbPool[sk.(string)]
-// 		if db != nil {
-// 			// fmt.Println("检测到库分区, 切换DB链接")
-// 			// fmt.Println(tx.Statement.ConnPool)
-// 			tx.Statement.ConnPool = db.Config.ConnPool
-// 			// fmt.Println("分区切换完成")
-// 			// fmt.Println(tx.Statement.ConnPool)
-// 			// db.Statement = tx.Statement
-// 			// tx = db
-// 		}
-// 	}
-// 	sub.Statement.ConnPool = tx.Statement.ConnPool
-// 	// 数据权限回调遇到子查询时, 无法直接获取上下文相关信息, 故传入原有的tx用于获取信息
-// 	store.dataPermissonCallback(tx, sub)
-// 	tx.Table(table).Joins(fmt.Sprintf("join ( ? ) t1 on t1.%s = %s", subColumns, col), sub)
-
-// }
 
 // 设置创建前的回掉函数
 func (store *rdbStore) setCreatesCallback(tx *gorm.DB) {
@@ -283,10 +237,14 @@ func (store *rdbStore) buildSubQuery(tx *gorm.DB) (sub *gorm.DB) {
 	cb := cbI.(*Condition)
 
 	sub = rdb.BuildQuery(cb).Table(table)
-	sub.Where("deleted_at = 0 or deleted_at is null").Order("id")
+	sub.Where("deleted_at = 0 or deleted_at is null")
 	subColumns := fmt.Sprintf("sub%s", col)
 	sub = sub.Select(fmt.Sprintf("%s as %s ", col, subColumns))
-	tx.Table(table).Joins(fmt.Sprintf("join ( ? ) t1 on t1.%s = %s", subColumns, col), sub)
+	orders := "id"
+	if cb.Orders != "" {
+		orders = cb.Orders
+	}
+	tx.Table(table).Joins(fmt.Sprintf("join ( ? ) t1 on t1.%s = %s", subColumns, col), sub).Order(orders)
 	return
 
 }
