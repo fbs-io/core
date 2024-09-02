@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 22:49:03
  * @LastEditors: reel
- * @LastEditTime: 2024-08-11 11:48:44
+ * @LastEditTime: 2024-08-15 07:34:14
  * @Description: 分区相关
  */
 package rdb
@@ -93,6 +93,7 @@ func (store *rdbStore) AutoShardingTable(tableName, suffixs string) (err error) 
 	if tabler == nil {
 		return errorx.Errorf("无法获取表名为:%s的表结构:", tableName)
 	}
+	entityInfo := &EntityInfo{}
 
 	// 通过反射获取模型中是否包含分区字段用于创建分区
 	rt := reflect.TypeOf(tabler).Elem()
@@ -105,6 +106,8 @@ func (store *rdbStore) AutoShardingTable(tableName, suffixs string) (err error) 
 		strings.Contains(rtKey.Tag.Get("gorm"), "column:sk") {
 
 		store.shardingAllTable[tabler.TableName()] = true
+		entityInfo.IsSharding = true
+		entityInfo.ShardingModel = store.shardingModel
 	}
 	// 增加数据权限字段的判断
 	rtModel, ok1 = rt.FieldByName("DataPermissionStringModel")
@@ -116,17 +119,24 @@ func (store *rdbStore) AutoShardingTable(tableName, suffixs string) (err error) 
 
 		store.dataPermissionTable[tabler.TableName()] = true
 		store.dataPermissionTable["DataPermissionStringModel"] = true
-	}
-	// 增加数据权限字段的判断
-	rtModel, ok1 = rt.FieldByName("DataPermissionIntModel")
-	rtKey, ok2 = rt.FieldByName("DataPermission")
-	if ok1 && ok2 &&
-		rtKey.Name == "DataPermission" &&
-		rtModel.Name == "DataPermissionIntModel" &&
-		strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
+		entityInfo.IsDataPermission = true
+		entityInfo.DataPermissionType = "string"
+	} else {
+		// 增加数据权限字段的判断
+		rtModel, ok1 = rt.FieldByName("DataPermissionIntModel")
+		rtKey, ok2 = rt.FieldByName("DataPermission")
+		if ok1 && ok2 &&
+			rtKey.Name == "DataPermission" &&
+			rtModel.Name == "DataPermissionIntModel" &&
+			strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
 
-		store.dataPermissionTable[tabler.TableName()] = true
-		store.dataPermissionTable["DataPermissionIntModel"] = true
+			store.dataPermissionTable[tabler.TableName()] = true
+			store.dataPermissionTable["DataPermissionIntModel"] = true
+
+			entityInfo.IsDataPermission = true
+			entityInfo.DataPermissionType = "int"
+		}
+
 	}
 
 	// 处理表迁移
@@ -192,6 +202,14 @@ func (store *rdbStore) AutoShardingTable(tableName, suffixs string) (err error) 
 			}
 		}
 	}
+	// 如果只有分区, 没有数据权限的表, 默认缓存不过期
+	entityInfo.CacheTTL = -1
+
+	// 如果有数据权限的表, 缓存1小时
+	if entityInfo.IsDataPermission {
+		entityInfo.CacheTTL = 3600
+	}
+	store.entityInfo[tableName] = entityInfo
 	return nil
 }
 

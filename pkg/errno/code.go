@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 22:19:24
  * @LastEditors: reel
- * @LastEditTime: 2024-03-26 06:24:01
+ * @LastEditTime: 2024-08-20 07:46:25
  * @Description: 定义常用的错误代码
  */
 package errno
@@ -14,8 +14,7 @@ var (
 
 	// 系统相关代码
 	// 系统内部通用错误代码
-	ERRNO_SYSTEM            Errno = New(200, 50000, "系统内部错误")
-	ERRNO_TOO_MANY_REQUESTS Errno = New(200, 50001, "请求次数过多,请稍后再试")
+	ERRNO_SYSTEM Errno = New(200, 50000, "系统内部错误")
 	// 系统初始化及授权相关
 	ERRNO_INIT        Errno = New(200, 50001, "请先进行项目初始化")
 	ERRNO_DISCLAIMERS Errno = New(200, 50002, "请先同意软件服务协议")
@@ -35,6 +34,10 @@ var (
 	// 缓存错误相关
 	ERRNO_CACHE       Errno = New(200, 50201, "缓存错误")
 	ERRNO_CACHE_QUERY Errno = New(200, 50201, "缓存查询错误")
+
+	// 请求相关错误代码
+	ERRNO_TOO_MANY_REQUESTS Errno = New(200, 50301, "请求次数过多,请稍后再试")
+	ERRNO_NO_TRACE_REQUESTS Errno = New(200, 50302, "不合法请求")
 
 	// 业务错误
 	// 请求参数

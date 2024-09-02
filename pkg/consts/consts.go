@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-04 22:29:07
  * @LastEditors: reel
- * @LastEditTime: 2024-08-11 13:48:15
+ * @LastEditTime: 2024-08-21 07:32:43
  * @Description: 请填写简介
  */
 package consts
@@ -22,6 +22,14 @@ const (
 	CTX_DATA_PERMISSION_KEY = "ctx_data_permission"
 	// 上下文中分区DB标识
 	CTX_SHARDING_DB = "ctx_sharding_db"
+	// 上下文中的请求id
+	CTX_TRACE_ID = "ctx_trace_id"
+	// 链路追踪key
+	TRACE_ID = "trace_id"
+	// 链路追踪spankey
+	SPAN_ID = "span_id"
+	// 请求头的请求id
+	REQUEST_HEADER_TRACE_ID = "TRACE-ID"
 
 	// 日期格式化
 

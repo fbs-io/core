@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2024-08-11 17:47:05
+ * @LastEditTime: 2024-08-15 07:46:49
  * @Description: 回掉函数
  */
 package rdb
@@ -40,7 +40,7 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	sub := store.buildSubQuery(tx)
 	store.dataPermissonCallback(tx, sub)
 
-	// 分区表不存在不再直接查询
+	// 分区表不存在不再直接查询,TODO: 增加锁
 	table := tx.Statement.Table
 	if !store.shardingAllTable[table] {
 		return

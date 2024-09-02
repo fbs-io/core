@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2024-08-11 12:14:50
+ * @LastEditTime: 2024-08-27 06:52:36
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -16,6 +16,7 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/fbs-io/core/logx"
 	"github.com/fbs-io/core/pkg/consts"
 	"github.com/fbs-io/core/pkg/errno"
 	"github.com/fbs-io/core/store/cache"
@@ -154,23 +155,50 @@ type Context interface {
 	// 生成带有子查询的db对象
 	SubQueryTX() *gorm.DB
 
-	// 设置缓存, 增加分区处理逻辑
+	// 设置缓存
 	CacheSet(key, value string, funcs ...cache.OptFunc) error
 
-	// 获取缓存, 按分区获取
+	// 获取缓存
 	CacheGet(key string) string
 
-	// 按分区删除缓存
+	// 删除缓存
 	CacheDelete(key string) error
 
-	// 设置缓存对象, 增加分区处理逻辑
+	// 设置缓存对象
 	CacheSetWithObj(key string, value interface{}, funcs ...cache.OptFunc) error
 
-	//获取缓存对象, 按分区获取
+	//获取缓存对象
 	CacheGetWithObj(key string, result interface{}) error
 
 	// 获取分区DB对象, 用于事物处理
 	ShardingTx() *gorm.DB
+
+	// 打印日志
+
+	// info日志
+	//
+	// 默认传递上下文至日志中
+	LogInfo(msg string, infoF ...logx.EntityFunc)
+
+	// debug日志
+	//
+	// 默认传递上下文至日志中
+	LogDebug(msg string, infoF ...logx.EntityFunc)
+
+	// warn日志
+	//
+	// 默认传递上下文至日志中
+	LogWarn(msg string, infoF ...logx.EntityFunc)
+
+	// error日志
+	//
+	// 默认传递上下文至日志中
+	LogError(msg string, infoF ...logx.EntityFunc)
+
+	// Fatal日志
+	//
+	// 默认传递上下文至日志中
+	LogFatal(msg string, infoF ...logx.EntityFunc)
 }
 
 var _ Context = (*context)(nil)
@@ -394,7 +422,7 @@ func (ctx *context) TX(optFunc ...TxOptsFunc) (tx *gorm.DB) {
 		optfunc(txopt)
 	}
 	sk, _ := ctx.CtxGet(CTX_SHARDING_KEY).(string)
-	tx = ctx.Core().RDB().DB().Where("1 = 1")
+	tx = ctx.Core().RDB().DB().Where("1 = 1").WithContext(ctx.Ctx())
 
 	// 如果没有参数, 直接返回
 	rvi, ok := ctx.ctx.Get(CTX_REFLECT_VALUE)
@@ -435,7 +463,7 @@ func (c *context) Auth() (auth string) {
 
 // 只保留上下文参数的db对象
 func (ctx *context) NewTX(optFunc ...TxOptsFunc) *gorm.DB {
-	tx := ctx.Core().RDB().DB().Where("1=1")
+	tx := ctx.Core().RDB().DB().Where("1=1").WithContext(ctx.Ctx())
 
 	for k, v := range ctx.ctx.Copy().Keys {
 		tx = tx.Set(k, v)
@@ -447,7 +475,7 @@ func (ctx *context) NewTX(optFunc ...TxOptsFunc) *gorm.DB {
 func (ctx *context) SubQueryTX() *gorm.DB {
 	return ctx.TX(
 		SetTxMode(TX_QRY_MODE_SUBID),
-	)
+	).WithContext(ctx.Ctx())
 }
 
 func (ctx *context) ShardingKey() (sk string) {
@@ -458,33 +486,28 @@ func (ctx *context) ShardingKey() (sk string) {
 	return skI.(string)
 }
 
-// 设置分区缓存
+// 设置缓存
 func (ctx *context) CacheSet(key, value string, funcs ...cache.OptFunc) error {
-	sk := ctx.ShardingKey()
-	return ctx.core.Cache().Set(fmt.Sprintf("%s::%s", key, sk), value, funcs...)
+	return ctx.core.Cache().Set(key, value, funcs...)
 }
 
-// 获取分区缓存时
+// 获取缓存
 func (ctx *context) CacheGet(key string) string {
-	sk := ctx.ShardingKey()
-	return ctx.core.Cache().Get(fmt.Sprintf("%s::%s", key, sk))
+	return ctx.core.Cache().Get(key)
 }
 
-// 设置分区缓存对象
+// 设置缓存对象
 func (ctx *context) CacheSetWithObj(key string, value interface{}, funcs ...cache.OptFunc) error {
-	sk := ctx.ShardingKey()
 	vb, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	return ctx.core.Cache().Set(fmt.Sprintf("%s::%s", key, sk), string(vb), funcs...)
+	return ctx.core.Cache().Set(key, string(vb), funcs...)
 }
 
-// 获取分区缓存对象
-// 根据key获取单个对象
+// 根据key获取单个缓存对象
 func (ctx *context) CacheGetWithObj(key string, res interface{}) error {
-	sk := ctx.ShardingKey()
-	vbs := ctx.core.Cache().Get(fmt.Sprintf("%s::%s", key, sk))
+	vbs := ctx.core.Cache().Get(key)
 	if vbs == "" {
 		return errors.New("没有缓存数据")
 	}
@@ -492,12 +515,7 @@ func (ctx *context) CacheGetWithObj(key string, res interface{}) error {
 }
 
 // 删除缓存
-//
-// 根据分区进行删除
 func (ctx *context) CacheDelete(key string) error {
-	sk := ctx.ShardingKey()
-	key = fmt.Sprintf("%s::%s", key, sk)
-
 	return ctx.core.Cache().Del(key)
 }
 
@@ -512,6 +530,41 @@ func (ctx *context) ShardingTx() *gorm.DB {
 	for k, v := range ctx.ctx.Copy().Keys {
 		tx = tx.Set(k, v)
 	}
-	tx = tx.Set(consts.CTX_SHARDING_DB, ctx.ShardingKey())
+	tx = tx.Set(consts.CTX_SHARDING_DB, ctx.ShardingKey()).WithContext(ctx.Ctx())
 	return tx
+}
+
+// info日志
+//
+// 默认传递上下文至日志中
+func (ctx *context) LogInfo(msg string, infoF ...logx.EntityFunc) {
+	logx.APP.Info(msg, append(infoF, logx.Context(ctx.ctx))...)
+}
+
+// debug日志
+//
+// 默认传递上下文至日志中
+func (ctx *context) LogDebug(msg string, infoF ...logx.EntityFunc) {
+	logx.APP.Debug(msg, append(infoF, logx.Context(ctx.ctx))...)
+}
+
+// warn日志
+//
+// 默认传递上下文至日志中
+func (ctx *context) LogWarn(msg string, infoF ...logx.EntityFunc) {
+	logx.APP.Warn(msg, append(infoF, logx.Context(ctx.ctx))...)
+}
+
+// error日志
+//
+// 默认传递上下文至日志中
+func (ctx *context) LogError(msg string, infoF ...logx.EntityFunc) {
+	logx.APP.Error(msg, append(infoF, logx.Context(ctx.ctx))...)
+}
+
+// Fatal日志
+//
+// 默认传递上下文至日志中
+func (ctx *context) LogFatal(msg string, infoF ...logx.EntityFunc) {
+	logx.APP.Fatal(msg, append(infoF, logx.Context(ctx.ctx))...)
 }

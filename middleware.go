@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2024-06-02 10:18:27
+ * @LastEditTime: 2024-08-28 07:07:26
  * @Description: 常用的中间件
  */
 package core
@@ -16,10 +16,13 @@ import (
 	"time"
 
 	"github.com/fbs-io/core/logx"
+	"github.com/fbs-io/core/pkg/consts"
 	"github.com/fbs-io/core/pkg/errno"
 	"github.com/fbs-io/core/pkg/errorx"
+	"github.com/fbs-io/core/pkg/trace"
 	"github.com/fbs-io/core/session"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 const (
@@ -51,9 +54,9 @@ func CorsMiddleware(c Core) gin.HandlerFunc {
 			ctx.Header("Access-Control-Allow-Origin", origin)
 			ctx.Header("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE,UPDATE")
 			//允许跨域设置可以返回其他子段，可以自定义字段
-			ctx.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, Content-Length, X-CSRF-TOKEN, Token,session")
+			ctx.Header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization, Content-Length, X-CSRF-TOKEN, Token, session, TRACE-ID")
 			// 允许浏览器（客户端）可以解析的头部 （重要）
-			ctx.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, X-CSRF-TOKEN, SID")
+			ctx.Header("Access-Control-Expose-Headers", "Content-Length, Access-Control-Allow-Origin, Access-Control-Allow-Headers, X-CSRF-TOKEN, SID, TRACE-ID")
 			//设置缓存时间
 			ctx.Header("Access-Control-Max-Age", "172800")
 			//允许客户端传递校验信息比如 cookie (重要)
@@ -79,9 +82,21 @@ func CorsMiddleware(c Core) gin.HandlerFunc {
 // 日志中间件
 func LogMiddleware(c Core) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		if strings.Contains(ctx.Request.RequestURI, STATIC_PATH_PREFIX) {
+			ctx.Next()
+			return
+		}
+		startTime := time.Now()
+		logx.APP.Info("http请求开始", logx.F("status", ctx.Writer.Status()),
+			logx.Context(ctx),
+			logx.F("client_ip", ctx.ClientIP()),
+			logx.F("req_method", ctx.Request.Method),
+			logx.F("req_url", ctx.Request.RequestURI),
+		)
 		defer func() {
 			if err := recover(); err != nil {
-				logx.Sys.Warn("http请求发生错误", logx.F("status", ctx.Writer.Status()),
+				logx.APP.Warn("http请求发生错误", logx.F("status", ctx.Writer.Status()),
+					logx.Context(ctx),
 					logx.F("client_ip", ctx.ClientIP()),
 					logx.F("req_method", ctx.Request.Method),
 					logx.F("req_url", ctx.Request.RequestURI),
@@ -91,20 +106,17 @@ func LogMiddleware(c Core) gin.HandlerFunc {
 				ctx.Abort()
 				return
 			}
-
+			logx.APP.Info("http请求结束", logx.F("status", ctx.Writer.Status()),
+				logx.Context(ctx),
+				logx.DiffTime(startTime),
+				logx.F("client_ip", ctx.ClientIP()),
+				logx.F("req_method", ctx.Request.Method),
+				logx.F("req_url", ctx.Request.RequestURI),
+			)
 		}()
-		startTime := time.Now()
+
 		ctx.Next()
-		if strings.Contains(ctx.Request.RequestURI, STATIC_PATH_PREFIX) {
-			return
-		}
-		endTime := time.Now()
-		logx.Sys.Debug("http请求", logx.F("status", ctx.Writer.Status()),
-			logx.F("diff_time", fmt.Sprintf("%d ns", endTime.Sub(startTime))),
-			logx.F("client_ip", ctx.ClientIP()),
-			logx.F("req_method", ctx.Request.Method),
-			logx.F("req_url", ctx.Request.RequestURI),
-		)
+
 	}
 }
 
@@ -145,14 +157,26 @@ func SetSeesionType(sessionType string) SignatureOptFunc {
 // Singular: 默认 token 模式， 同时可以选择cookie，sid, csrftoken方式
 func SignatureMiddleware(c Core, sop ...SignatureOptFunc) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		if allowSource[requestKey(ctx)] {
-			ctx.Next()
-			return
-		}
 		if strings.Contains(ctx.Request.RequestURI, STATIC_PATH_PREFIX) {
 			ctx.Next()
 			return
 		}
+
+		startTime := time.Now()
+		logx.APP.Debug("SignatureMiddleware 签名校验开始",
+			logx.Context(ctx),
+		)
+		defer logx.APP.Debug("SignatureMiddleware 签名校验结束",
+			logx.Context(ctx),
+			logx.DiffTime(startTime),
+		)
+		if allowSource[requestKey(ctx)] {
+			logx.APP.Debug("SignatureMiddleware 例外的请求接口无需校验",
+				logx.Context(ctx),
+			)
+			return
+		}
+
 		var (
 			sessionKey    string
 			sessiionValue string
@@ -187,12 +211,18 @@ func SignatureMiddleware(c Core, sop ...SignatureOptFunc) gin.HandlerFunc {
 			} else {
 				ctx.JSON(200, errno.ERRNO_AUTH_NOT_LOGIN.ToMapWithError(err))
 			}
+			logx.APP.Debug("SignatureMiddleware 签名校验不通过",
+				logx.E(err),
+				logx.Context(ctx),
+			)
 			ctx.Abort()
 			return
 		}
 		// 用户鉴权成功后, 把用户信息写入上下文用于数据的查询,记录等
 		ctx.Set(CTX_AUTH, sessiionValue)
-		ctx.Next()
+		logx.APP.Debug("SignatureMiddleware 签名校验通过, 用户信息写入上下文传递",
+			logx.Context(ctx),
+		)
 
 	}
 }
@@ -204,13 +234,21 @@ func SignatureMiddleware(c Core, sop ...SignatureOptFunc) gin.HandlerFunc {
 // 同时根据约束, 自动完成参数校验
 func ParamsMiddleware(c Core) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		startTime := time.Now()
+		logx.APP.Debug("ParamsMiddleware 参数生成开始",
+			logx.Context(ctx),
+		)
+		var params interface{}
+
 		rt := requestParams[requestKey(ctx)]
 		if rt == nil {
-			ctx.Next()
+			logx.APP.Debug("ParamsMiddleware 无法获取参数配置, 无法生成参数",
+				logx.Context(ctx),
+			)
 			return
 		}
 		rv := reflect.New(rt)
-		params := rv.Interface()
+		params = rv.Interface()
 		var err error
 		switch ctx.ContentType() {
 		case formContent:
@@ -221,12 +259,21 @@ func ParamsMiddleware(c Core) gin.HandlerFunc {
 			err = ctx.ShouldBindQuery(params)
 		}
 		if err != nil {
+			logx.APP.Debug("ParamsMiddleware 参数生成发生错误",
+				logx.Context(ctx),
+				logx.EV(err),
+			)
 			ctx.JSON(200, errno.ERRNO_PARAMS_BIND.ToMapWithError(errorx.Wrap(err, "校验参数发生错误")))
 			ctx.Abort()
 			return
 		}
 		ctx.Set(CTX_PARAMS, params)
 		ctx.Set(CTX_REFLECT_VALUE, rv)
+		logx.APP.Debug("ParamsMiddleware 参数生成结束, 参数写入上下文",
+			logx.Context(ctx),
+			logx.DiffTime(startTime),
+			logx.F("params", params),
+		)
 	}
 }
 
@@ -238,6 +285,26 @@ func LimiterMiddleware(c Core) gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
+		ctx.Next()
+	}
+}
+
+// 链路ID校验
+//
+// 如果没有trace_id, 不允许访问
+func TraceMiddleware(c Core, hasUiTrace bool) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		traceID := ctx.Request.Header.Get(consts.REQUEST_HEADER_TRACE_ID)
+		if traceID == "" {
+			if hasUiTrace {
+				ctx.JSON(200, errno.ERRNO_NO_TRACE_REQUESTS.ToMap())
+				ctx.Abort()
+				return
+			}
+			traceID = uuid.New().String()
+		}
+		trace := &trace.Trace{TraceID: traceID}
+		ctx.Set(consts.CTX_TRACE_ID, trace)
 		ctx.Next()
 	}
 }

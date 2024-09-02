@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-08-14 20:39:55
  * @LastEditors: reel
- * @LastEditTime: 2024-01-14 17:38:07
+ * @LastEditTime: 2024-08-25 19:39:12
  * @Description: 适用于gorm的logger
  */
 package logx
@@ -14,9 +14,11 @@ import (
 	"path"
 	"time"
 
+	"github.com/fbs-io/core/pkg/consts"
 	"github.com/fbs-io/core/pkg/env"
 	"github.com/fbs-io/core/pkg/errorx"
 	"github.com/fbs-io/core/pkg/filex"
+	"github.com/fbs-io/core/pkg/trace"
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"github.com/rifflock/lfshook"
 	"github.com/sirupsen/logrus"
@@ -90,7 +92,7 @@ func NewGormLogger(optF ...optFunc) (*gormLogger, error) {
 		logrus.ErrorLevel: logWriter,
 		logrus.PanicLevel: logWriter,
 	}
-	lfHook := lfshook.NewHook(writerMap, &logrus.JSONFormatter{
+	lfHook := lfshook.NewHook(writerMap, &logrus.TextFormatter{
 		TimestampFormat: o.timestampFormat,
 	})
 	log.AddHook(lfHook)
@@ -120,40 +122,60 @@ func (l *gormLogger) LogMode(levle gormlogger.LogLevel) gormlogger.Interface {
 }
 
 func (l *gormLogger) Info(ctx context.Context, s string, args ...interface{}) {
-	l.log.WithContext(ctx).Infof(s, args...)
+	entity := l.Entity(ctx)
+	entity.Infof(s, args...)
 }
 
 func (l *gormLogger) Warn(ctx context.Context, s string, args ...interface{}) {
-	l.log.WithContext(ctx).Warnf(s, args...)
+	entity := l.Entity(ctx)
+	entity.Warnf(s, args...)
+
 }
 
 func (l *gormLogger) Error(ctx context.Context, s string, args ...interface{}) {
-	l.log.WithContext(ctx).Errorf(s, args...)
+	entity := l.Entity(ctx)
+	entity.Errorf(s, args...)
 }
 
 func (l *gormLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
 	elapsed := time.Since(begin)
 	sql, _ := fc()
 	fields := logrus.Fields{}
-	// if l.SourceField != "" {
-	// 	fields[l.SourceField] = utils.FileWithLineNum()
-	// }
+	entity := l.Entity(ctx)
+
 	if err != nil && !(errors.Is(err, gorm.ErrRecordNotFound)) {
 		fields[logrus.ErrorKey] = err
-		l.log.WithContext(ctx).WithFields(fields).Errorf("%s [%s]", sql, elapsed)
+		entity.WithFields(fields).Errorf("%s diff_time=%s", sql, elapsed)
 		return
 	}
 
 	if l.slowThreshold != 0 && elapsed > l.slowThreshold {
-		l.log.WithContext(ctx).WithFields(fields).Warnf("%s [%s]", sql, elapsed)
+		entity.WithFields(fields).Warnf("%s diff_time=%s", sql, elapsed)
 		return
 	}
 
 	if env.Active().Value() == env.ENV_MODE_DEV {
-		l.log.WithContext(ctx).WithFields(fields).Debugf("%s [%s]", sql, elapsed)
+		entity.WithFields(fields).Debugf("%s diff_time=%s", sql, elapsed)
 	}
 }
 
 func (l *gormLogger) Close() {
 	l.file.Close()
+}
+
+func (log *gormLogger) Entity(ctx context.Context) (entity *logrus.Entry) {
+	ti := ctx.Value(consts.CTX_TRACE_ID)
+	if ti != nil {
+		tv := ti.(*trace.Trace)
+		if tv.SpanID != "" {
+			entity = log.log.
+				WithFields(logrus.Fields{consts.TRACE_ID: tv.TraceID}).
+				WithFields(logrus.Fields{consts.SPAN_ID: tv.SpanID})
+			return
+		}
+		entity = log.log.WithFields(logrus.Fields{consts.TRACE_ID: tv.TraceID})
+		return
+	}
+
+	return log.log.WithContext(ctx)
 }

@@ -2,19 +2,22 @@
  * @Author: reel
  * @Date: 2023-06-04 22:37:35
  * @LastEditors: reel
- * @LastEditTime: 2023-08-15 22:53:03
+ * @LastEditTime: 2024-08-27 07:25:12
  * @Description: 请填写简介
  */
 package logx
 
 import (
+	"context"
 	"os"
 	"path"
 	"time"
 
+	"github.com/fbs-io/core/pkg/consts"
 	"github.com/fbs-io/core/pkg/env"
 	"github.com/fbs-io/core/pkg/errorx"
 	"github.com/fbs-io/core/pkg/filex"
+	"github.com/fbs-io/core/pkg/trace"
 
 	rotatelogs "github.com/lestrrat-go/file-rotatelogs"
 	"github.com/rifflock/lfshook"
@@ -32,11 +35,11 @@ type logger struct {
 type Logger interface {
 	loggerP()
 	Close()
-	Debug(msg string, infoF ...infoFunc)
-	Info(msg string, infoF ...infoFunc)
-	Warn(msg string, infoF ...infoFunc)
-	Error(msg string, infoF ...infoFunc)
-	Fatal(msg string, infoF ...infoFunc)
+	Debug(msg string, infoF ...EntityFunc)
+	Info(msg string, infoF ...EntityFunc)
+	Warn(msg string, infoF ...EntityFunc)
+	Error(msg string, infoF ...EntityFunc)
+	Fatal(msg string, infoF ...EntityFunc)
 }
 
 func New(optF ...optFunc) (Logger, error) {
@@ -100,7 +103,7 @@ func New(optF ...optFunc) (Logger, error) {
 		logrus.ErrorLevel: logWriter,
 		logrus.PanicLevel: logWriter,
 	}
-	lfHook := lfshook.NewHook(writerMap, &logrus.JSONFormatter{
+	lfHook := lfshook.NewHook(writerMap, &logrus.TextFormatter{
 		TimestampFormat: o.timestampFormat,
 	})
 	log.AddHook(lfHook)
@@ -117,29 +120,29 @@ func (l *logger) Close() {
 	l.file.Close()
 }
 
-func (log *logger) Debug(msg string, infoF ...infoFunc) {
-	infos := mkInfo(msg, infoF...)
-	log.log.WithFields(infos.fields).Debug(infos.msg)
+func (log *logger) Debug(msg string, infoF ...EntityFunc) {
+	entity := log.Entity(infoF...)
+	entity.Debug(msg)
 }
 
-func (log *logger) Info(msg string, infoF ...infoFunc) {
-	infos := mkInfo(msg, infoF...)
-	log.log.WithFields(infos.fields).Info(infos.msg)
+func (log *logger) Info(msg string, infoF ...EntityFunc) {
+	entity := log.Entity(infoF...)
+	entity.Info(msg)
 }
 
-func (log *logger) Warn(msg string, infoF ...infoFunc) {
-	infos := mkInfo(msg, infoF...)
-	log.log.WithFields(infos.fields).Warn(infos.msg)
+func (log *logger) Warn(msg string, infoF ...EntityFunc) {
+	entity := log.Entity(infoF...)
+	entity.Warn(msg)
 }
 
-func (log *logger) Error(msg string, infoF ...infoFunc) {
-	infos := mkInfo(msg, infoF...)
-	log.log.WithFields(infos.fields).Error(infos.msg)
+func (log *logger) Error(msg string, infoF ...EntityFunc) {
+	entity := log.Entity(infoF...)
+	entity.Error(msg)
 }
 
-func (log *logger) Fatal(msg string, infoF ...infoFunc) {
-	infos := mkInfo(msg, infoF...)
-	log.log.WithFields(infos.fields).Fatal(infos.msg)
+func (log *logger) Fatal(msg string, infoF ...EntityFunc) {
+	entity := log.Entity(infoF...)
+	entity.Fatal(msg)
 }
 
 // gorm 日志使用
@@ -162,13 +165,15 @@ func (log *logger) Print(v ...interface{}) {
 
 // 日志写入参数
 type info struct {
-	msg    string
-	fields logrus.Fields
+	msg       string
+	fields    logrus.Fields
+	context   context.Context
+	startTime time.Time
 }
 
-type infoFunc func(*info)
+type EntityFunc func(*info)
 
-func F(key string, value interface{}) infoFunc {
+func F(key string, value interface{}) EntityFunc {
 	return func(i *info) {
 		if value == nil {
 			i.fields[key] = nil
@@ -178,35 +183,73 @@ func F(key string, value interface{}) infoFunc {
 	}
 }
 
-func EV(err error) infoFunc {
+// 错误信息
+//
+// 作为其中一个字段进行打印
+func EV(err error) EntityFunc {
 	return func(i *info) {
-		if err == nil {
-			i.fields["error"] = ""
-		} else {
+		if err != nil {
 			i.fields["error"] = err.Error()
 		}
-
 	}
 }
 
-func E(err error) infoFunc {
+// 错误信息
+//
+// 打印在msg
+func E(err error) EntityFunc {
 	return func(i *info) {
 		i.msg = err.Error()
 	}
 }
 
-func mkInfo(msg string, infoF ...infoFunc) *info {
+// 添加上下文
+func Context(ctx context.Context) EntityFunc {
+	return func(i *info) {
+		i.context = ctx
+	}
+}
+
+// 计算执行时间
+func DiffTime(startTime time.Time) EntityFunc {
+	return func(i *info) {
+		i.startTime = startTime
+	}
+}
+
+func (log *logger) Entity(infoF ...EntityFunc) (entity *logrus.Entry) {
 	var infos = &info{
-		msg:    msg,
-		fields: make(logrus.Fields),
+		fields:  make(logrus.Fields, 10),
+		context: nil,
 	}
 	for _, infof := range infoF {
 		infof(infos)
 	}
-	return infos
+	if infos.startTime.Unix() > 0 {
+		infos.fields["diff_time"] = time.Since(infos.startTime)
+	}
+	if infos.context != nil {
+		ti := infos.context.Value(consts.CTX_TRACE_ID)
+		var tv *trace.Trace
+		if ti != nil {
+			tv = ti.(*trace.Trace)
+			if tv.SpanID != "" {
+				entity = log.log.
+					WithFields(logrus.Fields{consts.TRACE_ID: tv.TraceID}).
+					WithFields(logrus.Fields{consts.SPAN_ID: tv.SpanID}).
+					WithFields(infos.fields)
+				return
+			}
+			entity = log.log.WithFields(logrus.Fields{consts.TRACE_ID: tv.TraceID}).
+				WithFields(infos.fields)
+		}
+		return
+	}
+	entity = log.log.WithFields(infos.fields)
+	return
 }
 
-func Details(mags map[string]interface{}) infoFunc {
+func Details(mags map[string]interface{}) EntityFunc {
 	return func(i *info) {
 		for k, v := range mags {
 			i.fields[k] = v

@@ -113,6 +113,7 @@ type ShardingModel struct {
 	ShadingKey string `json:"-" gorm:"column:sk;index;comment:分区"`
 }
 
+// TODO: 清理不需要的函数
 func (m *ShardingModel) TableName(table string) string {
 	if m.ShadingKey == "" {
 		return table
