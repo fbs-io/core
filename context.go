@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2024-08-27 06:52:36
+ * @LastEditTime: 2024-10-05 16:14:18
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/fbs-io/core/logx"
@@ -35,6 +36,7 @@ const (
 	CTX_TX                  = "ctx_tx"                       // 上下文的数据库信息
 	CTX_PARAMS              = "ctx_params"                   // 上下文的参数
 	CTX_AUTH                = consts.CTX_AUTH                // 上下文的操作用户
+	CTX_LOG_CONTENT         = "ctx_operate_log_content"      // 上下文的操作内容
 	CTX_REFLECT_VALUE       = "reflect_value"                // 上下文中的反射值,用于自动校验并生成参数
 	CTX_SHARDING_KEY        = consts.CTX_SHARDING_KEY        // 上下文的数据分区
 	CTX_DATA_PERMISSION_KEY = consts.CTX_DATA_PERMISSION_KEY // 上下文的数据权限
@@ -79,7 +81,7 @@ type Context interface {
 	HTML(name string, obj interface{})
 
 	// 返回 Json
-	JSON(data interface{})
+	JSON(data interface{}, funcs ...FuncOperateOpt)
 
 	// Header 获取 Header 对象
 	Header() http.Header
@@ -329,13 +331,18 @@ func (c *context) HTML(name string, obj interface{}) {
 	c.ctx.HTML(200, name+".html", obj)
 }
 
-func (c *context) JSON(data interface{}) {
+func (c *context) JSON(data interface{}, funcs ...FuncOperateOpt) {
+
 	en, ok := data.(errno.Errno)
 	if ok {
 		c.ctx.JSON(en.HTTPCode(), en.ToMap())
+
+		// 操作日志
+		setOperateLog(c, en, funcs...)
 		return
 	}
 	c.ctx.JSON(200, data)
+
 }
 
 // Request 获取 Request
@@ -422,14 +429,12 @@ func (ctx *context) TX(optFunc ...TxOptsFunc) (tx *gorm.DB) {
 		optfunc(txopt)
 	}
 	sk, _ := ctx.CtxGet(CTX_SHARDING_KEY).(string)
-	tx = ctx.Core().RDB().DB().Where("1 = 1").WithContext(ctx.Ctx())
-
+	tx = ctx.Core().RDB().DB().Where("1 = 1").WithContext(ctx.ctx.Copy())
 	// 如果没有参数, 直接返回
 	rvi, ok := ctx.ctx.Get(CTX_REFLECT_VALUE)
 	if !ok {
 		return
 	}
-
 	cb := rdb.GenConditionWithParams(rvi.(reflect.Value))
 	cb.QryDelete = txopt.qryDelete
 	cb.ShardingKey = sk
@@ -438,14 +443,15 @@ func (ctx *context) TX(optFunc ...TxOptsFunc) (tx *gorm.DB) {
 	}
 	switch txopt.mode {
 	case TX_QRY_MODE_SUBID:
-		tx.Set(rdb.TX_CONDITION_BUILD_KEY, cb)
-		tx.Set(rdb.TX_SUB_QUERY_COLUMN_KEY, "id")
+		tx = tx.Set(rdb.TX_CONDITION_BUILD_KEY, cb)
+		tx = tx.Set(rdb.TX_SUB_QUERY_COLUMN_KEY, "id")
 	default:
 		tx = ctx.Core().RDB().BuildQuery(cb)
 	}
 	for k, v := range ctx.ctx.Copy().Keys {
 		tx.Set(k, v)
 	}
+
 	return
 }
 
@@ -473,9 +479,7 @@ func (ctx *context) NewTX(optFunc ...TxOptsFunc) *gorm.DB {
 
 // 返回子查询的db对象
 func (ctx *context) SubQueryTX() *gorm.DB {
-	return ctx.TX(
-		SetTxMode(TX_QRY_MODE_SUBID),
-	).WithContext(ctx.Ctx())
+	return ctx.TX(SetTxMode(TX_QRY_MODE_SUBID))
 }
 
 func (ctx *context) ShardingKey() (sk string) {
@@ -567,4 +571,71 @@ func (ctx *context) LogError(msg string, infoF ...logx.EntityFunc) {
 // 默认传递上下文至日志中
 func (ctx *context) LogFatal(msg string, infoF ...logx.EntityFunc) {
 	logx.APP.Fatal(msg, append(infoF, logx.Context(ctx.ctx))...)
+}
+
+func setOperateLog(ctx Context, en errno.Errno, funcs ...FuncOperateOpt) {
+	defer func() {
+		setFreeCtx(ctx)
+		if err := recover(); err != nil {
+			logx.Sys.Error("写入操作日志发生错误", logx.F("status", ctx.Ctx().Writer.Status()),
+				logx.Context(ctx.Ctx()),
+			)
+			return
+		}
+	}()
+
+	// 设置配置项
+	opt := &operateOpt{}
+	for _, fs := range funcs {
+		fs(opt)
+	}
+	// 如果配置项都为空, 则不需要写入操作日志
+	if !opt.isSet && opt.content == "" && opt.result == nil {
+		return
+	}
+	resource := resourcesMap[fmt.Sprintf("%s%s", strings.ToLower(ctx.Ctx().Request.Method), strings.Replace(ctx.Ctx().FullPath(), "/", ":", -1))]
+
+	auth := ""
+	authI, ok := ctx.Ctx().Get(CTX_AUTH)
+	if ok {
+		auth = authI.(string)
+	}
+	res := "成功"
+
+	if en.Code() != errno.ERRNO_OK.Code() {
+		res = "失败"
+	}
+
+	content := fmt.Sprintf("%s%s%v%s", auth, resource.Desc, opt.result, res)
+	if opt.result == nil {
+		content = fmt.Sprintf("%s%s%s", auth, resource.Desc, res)
+		if res == "失败" {
+			if en.Details() == nil {
+				content = fmt.Sprintf("%s%s%s, 错误:%s", auth, resource.Desc, res, en.Message())
+			} else {
+				content = fmt.Sprintf("%s%s%s, 错误:%s details:%v", auth, resource.Desc, res, en.Message(), en.Details())
+			}
+		}
+	}
+
+	if opt.content != "" {
+		content = opt.content
+	}
+	operateLog := &OperateLog{
+		IP:        ctx.Ctx().ClientIP(),
+		User:      auth,
+		Content:   content,
+		Result:    res,
+		Method:    ctx.Ctx().Request.Method,
+		Api:       ctx.Ctx().Request.RequestURI,
+		ApiName:   resource.Desc,
+		TraceID:   ctx.Ctx().Request.Header.Get(consts.REQUEST_HEADER_TRACE_ID),
+		OperateID: ctx.Ctx().Request.Header.Get(consts.REQUEST_HEADER_OPERATE_ID),
+	}
+	operateLog.ShadingKey = ctx.ShardingKey()
+	err := ctx.Core().RDB().DB().Create(operateLog).Error
+	if err != nil {
+		logx.Sys.Error("写入操作日志失败", logx.EV(err))
+	}
+
 }

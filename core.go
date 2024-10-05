@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2024-03-28 06:10:47
+ * @LastEditTime: 2024-10-04 13:24:08
  * @Description: 管理核心组件的启动和运行
  */
 package core
@@ -90,6 +90,7 @@ func New(funcs ...FuncCores) (Core, error) {
 	}
 
 	env.SetAppName(opt.appName)
+	env.SetAppVersion(opt.appVersion)
 	env.Init()
 
 	gin.SetMode(env.Active().Mode())
@@ -113,15 +114,20 @@ func New(funcs ...FuncCores) (Core, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "初始化应用管理服务发生错误")
 	}
+	db := rdb.New()
+	db.SetShardingModel(opt.shardingModel)
+
 	c := &core{
 		msc:     dms,
 		ams:     ams,
-		rdb:     rdb.New(),
+		rdb:     db,
 		cron:    cron.New(),
 		cache:   cache.New(),
 		config:  &config.Config{},
 		limiter: rate.NewLimiter(rate.Limit(opt.limitNumber), opt.limitSize),
 	}
+
+	// session配置
 	c.session = session.New(session.Store(c.cache), session.Prefix("app::session"))
 	// 配置中心和其他服务分开启动和关闭
 

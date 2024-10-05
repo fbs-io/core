@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2024-08-16 07:08:47
+ * @LastEditTime: 2024-10-05 10:33:16
  * @Description: 关系数据库配置
  */
 package rdb
@@ -28,18 +28,15 @@ import (
 
 const (
 	// 数据分区模式
-	// 默认值, 不分区
+	// 默认值, 数据都在一张表中, 以分区字段作为过滤条件
 	SHADING_MODEL_NOT int8 = iota
-
-	// 数据都在一张表中
-	SHADING_MODEL_ONE
 
 	// 按表分区, 根据分区字段值, 设置表后缀, 如果表设置了分区
 	SHADING_MODEL_TABLE
 
 	// 按库(不按schema)分区, 根据分区字段值, 设置不同的库名后缀
 	//
-	// 请注意, 要确保当前用户有创建数据库以及数据表的权限
+	// 请注意, 要确保当前数据库用户有创建数据库以及数据表的权限
 	SHADING_MODEL_DB
 
 	// 数据表初始化, 一般测试使用, 生成谨慎使用
@@ -65,7 +62,7 @@ type rdbStore struct {
 	migrateList         []func() error
 	shardingTable       map[string][]string // 仅仅写入注册了分区表的表
 	shardingModel       int8
-	shardingSuffixs     []interface{}          //分区后缀
+	shardingSuffixs     []string               //分区后缀
 	shardingAllTable    map[string]bool        // 模型注册时, 只要包含了分区字段的表, 都会写入到该map中, 用于回调函数判断是否增加分区字段
 	dataPermissionTable map[string]bool        // 模型注册时, 只要包含了权限字段的表, 都会写入到该map中, 用于回调函数判断是否增加分区字段
 	entityInfo          map[string]*EntityInfo // 实体信息, 包含是否有分区, 是否是分区表, 是否有权限设置, 实体数据缓存时间等
@@ -105,7 +102,7 @@ type Store interface {
 	// 该模式适用于使用cores 上下文ctx.TX()方式生成的 gorm.DB, 且在上下文中传入了分区字段, 会自动构建查询条件, 配合 ShardingModel使用,可以自动写入分区字段
 	//
 	// 如果直接使用gorm.DB, 该设置并不会生效
-	SetShardingModel(model int8, suffix []interface{})
+	SetShardingModel(model int8)
 
 	// 获取分区模式
 	ShardingModel() (model int8)
@@ -123,7 +120,7 @@ type Store interface {
 	AddShardingSuffixs(suffixs string) (err error)
 
 	// 增加分区
-	AddShardingSuffixsWithTX(tx *gorm.DB, suffixs string) (err error)
+	// AddShardingSuffixsWithTX(tx *gorm.DB, suffixs string) (err error)
 
 	// 获取分区DB链接
 	GetShardingDB(shardingKey string) *gorm.DB
@@ -136,6 +133,9 @@ type Store interface {
 
 	// 获取实体信息
 	GetEntityInfo(table string) *EntityInfo
+
+	// 删除分区
+	DelShardingSuffix(suffixs string) error
 }
 
 var _ Store = (*rdbStore)(nil)
@@ -146,7 +146,7 @@ var rdb = &rdbStore{
 	tablers:             make(map[string]Tabler, 1000),
 	migrateList:         make([]func() error, 0, 100),
 	shardingTable:       make(map[string][]string, 100),
-	shardingSuffixs:     make([]interface{}, 0, 100),
+	shardingSuffixs:     make([]string, 0, 100),
 	shardingAllTable:    make(map[string]bool, 100),
 	dataPermissionTable: make(map[string]bool, 100),
 	entityInfo:          make(map[string]*EntityInfo, 100),
@@ -170,6 +170,8 @@ func (store *rdbStore) Start() (err error) {
 		return err
 	}
 	store.db = db
+	store.GetShardingSuffixs()
+	store.setDBCallbackWithSharding(store.db)
 	// 注册回调函数
 	store.registerCallbacks()
 	err = store.autoMigrate()
@@ -271,6 +273,10 @@ func (store *rdbStore) Register(t Tabler, fs ...RegisterFunc) Store {
 }
 
 func (store *rdbStore) autoMigrate() (err error) {
+
+	store.db.AutoMigrate(&Sharding{})
+
+	// 初始化注册信息
 	for _, fs := range store.migrateList {
 		e := fs()
 		if e != nil {
@@ -415,4 +421,14 @@ func (store *rdbStore) GetDataPermissionTable(table string) bool {
 // 获取有数据权限字段的表
 func (store *rdbStore) GetEntityInfo(table string) *EntityInfo {
 	return store.entityInfo[table]
+}
+
+func (store *rdbStore) GetShardingSuffixs() (result []string) {
+	result = make([]string, 0, 10)
+
+	tx := store.db
+	tx = tx.Table(TABLE_SYSTEM_CORE_SHARDING).Select("suffix")
+	tx.Find(&result)
+	store.shardingSuffixs = result
+	return
 }

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 06:04:12
  * @LastEditors: reel
- * @LastEditTime: 2024-07-07 18:52:14
+ * @LastEditTime: 2024-10-01 14:40:40
  * @Description: 定义常用的模型用于快速开发
  */
 
@@ -193,4 +193,12 @@ func (m *Model) GetID() uint {
 
 func (m *Model) GetStatus() int8 {
 	return m.Status
+}
+
+type ModelCode struct {
+	BizCode string `json:"biz_code" gorm:"comment:业务代码;unique"`
+}
+
+func (m *ModelCode) Code() string {
+	return m.BizCode
 }

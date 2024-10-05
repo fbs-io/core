@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 22:19:24
  * @LastEditors: reel
- * @LastEditTime: 2023-08-26 21:53:28
+ * @LastEditTime: 2024-10-05 16:04:10
  * @Description: API 常用状态码
  */
 package errno
@@ -15,7 +15,7 @@ type Errno interface {
 	en()
 	WithStack(err error) Errno
 	HTTPCode() int
-	code() int
+	Code() int
 	Message() string
 	Stack() error
 	ToMap() map[string]interface{}
@@ -23,6 +23,7 @@ type Errno interface {
 	ToMapWithError(err error) map[string]interface{}
 	WrapData(details interface{}) Errno
 	WrapError(err error) Errno
+	Details() interface{}
 	Notify() Errno
 }
 
@@ -59,7 +60,7 @@ func (e *code) HTTPCode() int {
 	return e.httpCode
 }
 
-func (e *code) code() int {
+func (e *code) Code() int {
 	return e.errno
 }
 
@@ -161,4 +162,8 @@ func (e *code) Notify() Errno {
 	}
 	e.isNotify = true
 	return e
+}
+
+func (e *code) Details() interface{} {
+	return e.details
 }

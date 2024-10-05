@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2024-07-07 20:48:18
+ * @LastEditTime: 2024-10-05 00:00:55
  * @Description: 系统配置相关操作
  */
 package core
@@ -20,6 +20,7 @@ import (
 	"github.com/fbs-io/core/pkg/errorx"
 	"github.com/fbs-io/core/service"
 	"github.com/fbs-io/core/store/dsn"
+	"github.com/fbs-io/core/store/rdb"
 
 	"github.com/gin-gonic/gin"
 )
@@ -75,6 +76,9 @@ func (c *core) install() (err error) {
 	}
 
 	// 把资源map转成list, 初始化写入资源列表
+	c.rdb.Register(&OperateLog{})
+	c.rdb.Register(&rdb.Sharding{})
+
 	s := &Resources{}
 	c.rdb.Register(s, func() error { return c.rdb.DB().Table(s.TableName()).CreateInBatches(resources, len(resources)).Error })
 

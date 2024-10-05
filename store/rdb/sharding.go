@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 22:49:03
  * @LastEditors: reel
- * @LastEditTime: 2024-08-15 07:34:14
+ * @LastEditTime: 2024-10-05 10:44:30
  * @Description: 分区相关
  */
 package rdb
@@ -29,13 +29,12 @@ import (
 // 该模式适用于使用cores 上下文ctx.TX()方式生成的 gorm.DB, 且在上下文中传入了分区字段, 会自动构建查询条件, 配合 ShardingModel使用,可以自动写入分区字段
 //
 // 如果直接使用gorm.DB查询, 该设置并不会生效
-func (store *rdbStore) SetShardingModel(model int8, suffix []interface{}) {
+func (store *rdbStore) SetShardingModel(model int8) {
 	store.shardingModel = model
-	store.shardingSuffixs = suffix
-	if suffix == nil {
-		store.shardingSuffixs = make([]interface{}, 0, 100)
-	}
-	store.setDBCallbackWithSharding(store.db)
+	// store.shardingSuffixs = suffix
+	// if suffix == nil {
+	// 	store.shardingSuffixs = make([]interface{}, 0, 100)
+	// }
 
 }
 
@@ -73,7 +72,16 @@ func (store *rdbStore) AddMigrateList(fs ...func() error) {
 //
 // 同时自动创建分区表
 func (store *rdbStore) AddShardingSuffixs(suffixs string) (err error) {
+
+	if suffixs == "" {
+		return errorx.New("设置分区key不能为空")
+	}
+	err = store.db.Table(TABLE_SYSTEM_CORE_SHARDING).Create(&Sharding{suffixs}).Error
+	if err != nil {
+		return
+	}
 	store.shardingSuffixs = append(store.shardingSuffixs, suffixs)
+
 	for tableName := range store.shardingAllTable {
 		err = store.AutoShardingTable(tableName, suffixs)
 		if err != nil {
@@ -81,6 +89,17 @@ func (store *rdbStore) AddShardingSuffixs(suffixs string) (err error) {
 		}
 	}
 	return
+}
+
+func (store *rdbStore) DelShardingSuffix(suffixs string) error {
+	var res = make([]string, 0, 10)
+	for _, item := range store.shardingSuffixs {
+		if item != suffixs {
+			res = append(res, item)
+		}
+	}
+	store.shardingSuffixs = res
+	return store.db.Table(TABLE_SYSTEM_CORE_SHARDING).Unscoped().Where(&Sharding{suffixs}).Delete(&Sharding{suffixs}).Error
 }
 
 // 迁移表
@@ -94,7 +113,6 @@ func (store *rdbStore) AutoShardingTable(tableName, suffixs string) (err error) 
 		return errorx.Errorf("无法获取表名为:%s的表结构:", tableName)
 	}
 	entityInfo := &EntityInfo{}
-
 	// 通过反射获取模型中是否包含分区字段用于创建分区
 	rt := reflect.TypeOf(tabler).Elem()
 	rtModel, ok1 := rt.FieldByName("ShardingModel")
@@ -145,7 +163,7 @@ func (store *rdbStore) AutoShardingTable(tableName, suffixs string) (err error) 
 	case SHADING_MODEL_TABLE:
 		for _, suffix := range store.shardingSuffixs {
 			nweTable := fmt.Sprintf("%s_%v", tableName, suffix)
-			if suffixs != "" && suffixs != suffix.(string) {
+			if suffixs != "" && suffixs != suffix {
 				continue
 			}
 			if strings.Contains(env.Active().DBInit(), tableName) ||
@@ -165,13 +183,13 @@ func (store *rdbStore) AutoShardingTable(tableName, suffixs string) (err error) 
 	// 处理库分区时的表迁移
 	case SHADING_MODEL_DB:
 		for _, suffix := range store.shardingSuffixs {
-			if suffixs != "" && suffixs != suffix.(string) {
+			if suffixs != "" && suffixs != suffix {
 				continue
 			}
-			db := store.dbPool[suffix.(string)]
+			db := store.dbPool[suffix]
 			if db == nil {
 				suffixDsn := dsn.CopyDsn(store.dsn)
-				suffixDsn.Name = fmt.Sprintf("%s_%s", suffixDsn.Name, strings.ToLower(suffix.(string)))
+				suffixDsn.Name = fmt.Sprintf("%s_%s", suffixDsn.Name, strings.ToLower(suffix))
 				if suffixDsn.Type == dsn.DSN_TYPE_PGSQL {
 					datname := ""
 					store.db.Table("pg_database").Where(" datname = ?", suffixDsn.Name).Select("datname").Find(&datname)
@@ -186,8 +204,9 @@ func (store *rdbStore) AutoShardingTable(tableName, suffixs string) (err error) 
 					return err
 				}
 				store.setDBCallbackWithSharding(db)
-				store.dbPool[suffix.(string)] = db
+				store.dbPool[suffix] = db
 			}
+
 			if strings.Contains(env.Active().DBInit(), tableName) ||
 				env.Active().DBInit() == TABLE_INIT_ALL {
 				// 分区表在重置主表时也全部重置
@@ -216,126 +235,126 @@ func (store *rdbStore) AutoShardingTable(tableName, suffixs string) (err error) 
 // 设置分区后缀
 //
 // 同时自动创建分区表
-func (store *rdbStore) AddShardingSuffixsWithTX(tx *gorm.DB, suffixs string) (err error) {
-	store.shardingSuffixs = append(store.shardingSuffixs, suffixs)
-	for tableName := range store.shardingAllTable {
-		err = store.AutoShardingTableWithTX(tx, tableName, suffixs)
-		if err != nil {
-			return
-		}
-	}
-	return
-}
+// func (store *rdbStore) AddShardingSuffixsWithTX(tx *gorm.DB, suffixs string) (err error) {
+// 	store.shardingSuffixs = append(store.shardingSuffixs, suffixs)
+// 	for tableName := range store.shardingAllTable {
+// 		err = store.AutoShardingTableWithTX(tx, tableName, suffixs)
+// 		if err != nil {
+// 			return
+// 		}
+// 	}
+// 	return
+// }
 
 // 迁移表
 //
 // 对表分区和库分区分别处理
 //
 // 支持自定义用于分区迁移的表
-func (store *rdbStore) AutoShardingTableWithTX(tx *gorm.DB, tableName, suffixs string) (err error) {
-	tabler := store.tablers[tableName]
-	if tabler == nil {
-		return errorx.Errorf("无法获取表名为:%s的表结构:", tableName)
-	}
+// func (store *rdbStore) AutoShardingTableWithTX(tx *gorm.DB, tableName, suffixs string) (err error) {
+// 	tabler := store.tablers[tableName]
+// 	if tabler == nil {
+// 		return errorx.Errorf("无法获取表名为:%s的表结构:", tableName)
+// 	}
 
-	// 通过反射获取模型中是否包含分区字段用于创建分区
-	rt := reflect.TypeOf(tabler).Elem()
-	rtModel, ok1 := rt.FieldByName("ShardingModel")
-	rtKey, ok2 := rt.FieldByName("ShadingKey")
-	// 通过多重判断, 确定模型中包含了分区字段
-	if ok1 && ok2 &&
-		rtKey.Name == "ShadingKey" &&
-		rtModel.Name == "ShardingModel" &&
-		strings.Contains(rtKey.Tag.Get("gorm"), "column:sk") {
+// 	// 通过反射获取模型中是否包含分区字段用于创建分区
+// 	rt := reflect.TypeOf(tabler).Elem()
+// 	rtModel, ok1 := rt.FieldByName("ShardingModel")
+// 	rtKey, ok2 := rt.FieldByName("ShadingKey")
+// 	// 通过多重判断, 确定模型中包含了分区字段
+// 	if ok1 && ok2 &&
+// 		rtKey.Name == "ShadingKey" &&
+// 		rtModel.Name == "ShardingModel" &&
+// 		strings.Contains(rtKey.Tag.Get("gorm"), "column:sk") {
 
-		store.shardingAllTable[tabler.TableName()] = true
-	}
-	// 增加数据权限字段的判断
-	rtModel, ok1 = rt.FieldByName("DataPermissionStringModel")
-	rtKey, ok2 = rt.FieldByName("DataPermission")
-	if ok1 && ok2 &&
-		rtKey.Name == "DataPermission" &&
-		rtModel.Name == "DataPermissionStringModel" &&
-		strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
+// 		store.shardingAllTable[tabler.TableName()] = true
+// 	}
+// 	// 增加数据权限字段的判断
+// 	rtModel, ok1 = rt.FieldByName("DataPermissionStringModel")
+// 	rtKey, ok2 = rt.FieldByName("DataPermission")
+// 	if ok1 && ok2 &&
+// 		rtKey.Name == "DataPermission" &&
+// 		rtModel.Name == "DataPermissionStringModel" &&
+// 		strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
 
-		store.dataPermissionTable[tabler.TableName()] = true
-		store.dataPermissionTable["DataPermissionStringModel"] = true
-	}
-	// 增加数据权限字段的判断
-	rtModel, ok1 = rt.FieldByName("DataPermissionIntModel")
-	rtKey, ok2 = rt.FieldByName("DataPermission")
-	if ok1 && ok2 &&
-		rtKey.Name == "DataPermission" &&
-		rtModel.Name == "DataPermissionIntModel" &&
-		strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
+// 		store.dataPermissionTable[tabler.TableName()] = true
+// 		store.dataPermissionTable["DataPermissionStringModel"] = true
+// 	}
+// 	// 增加数据权限字段的判断
+// 	rtModel, ok1 = rt.FieldByName("DataPermissionIntModel")
+// 	rtKey, ok2 = rt.FieldByName("DataPermission")
+// 	if ok1 && ok2 &&
+// 		rtKey.Name == "DataPermission" &&
+// 		rtModel.Name == "DataPermissionIntModel" &&
+// 		strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
 
-		store.dataPermissionTable[tabler.TableName()] = true
-		store.dataPermissionTable["DataPermissionIntModel"] = true
-	}
+// 		store.dataPermissionTable[tabler.TableName()] = true
+// 		store.dataPermissionTable["DataPermissionIntModel"] = true
+// 	}
 
-	// 处理表迁移
-	switch store.shardingModel {
-	// 处理表分区时的表迁移
-	case SHADING_MODEL_TABLE:
-		for _, suffix := range store.shardingSuffixs {
-			nweTable := fmt.Sprintf("%s_%v", tableName, suffix)
-			if suffixs != "" && suffixs != suffix.(string) {
-				continue
-			}
-			if strings.Contains(env.Active().DBInit(), tableName) ||
-				env.Active().DBInit() == TABLE_INIT_ALL {
-				// 分区表在重置主表时也全部重置
-				err = store.db.Table(nweTable).Migrator().DropTable(tabler)
-				if err != nil {
-					return
-				}
-			}
-			err = tx.Table(nweTable).Migrator().AutoMigrate(tabler)
-			if err != nil {
-				return
-			}
-		}
+// 	// 处理表迁移
+// 	switch store.shardingModel {
+// 	// 处理表分区时的表迁移
+// 	case SHADING_MODEL_TABLE:
+// 		for _, suffix := range store.shardingSuffixs {
+// 			nweTable := fmt.Sprintf("%s_%v", tableName, suffix)
+// 			if suffixs != "" && suffixs != suffix {
+// 				continue
+// 			}
+// 			if strings.Contains(env.Active().DBInit(), tableName) ||
+// 				env.Active().DBInit() == TABLE_INIT_ALL {
+// 				// 分区表在重置主表时也全部重置
+// 				err = store.db.Table(nweTable).Migrator().DropTable(tabler)
+// 				if err != nil {
+// 					return
+// 				}
+// 			}
+// 			err = tx.Table(nweTable).Migrator().AutoMigrate(tabler)
+// 			if err != nil {
+// 				return
+// 			}
+// 		}
 
-	// 处理库分区时的表迁移
-	case SHADING_MODEL_DB:
-		for _, suffix := range store.shardingSuffixs {
-			if suffixs != "" && suffixs != suffix.(string) {
-				continue
-			}
-			db := store.dbPool[suffix.(string)]
-			if db == nil {
-				suffixDsn := dsn.CopyDsn(store.dsn)
-				suffixDsn.Name = fmt.Sprintf("%s_%s", suffixDsn.Name, strings.ToLower(suffix.(string)))
-				if suffixDsn.Type == dsn.DSN_TYPE_PGSQL {
-					datname := ""
-					store.db.Table("pg_database").Where(" datname = ?", suffixDsn.Name).Select("datname").Find(&datname)
-					if datname != suffixDsn.Name {
-						store.db.Exec(fmt.Sprintf(`%s %s ;`, "create database ", suffixDsn.Name))
-					}
-				} else {
-					store.db.Exec(fmt.Sprintf(`%s %s ;`, "create database if not exists", suffixDsn.Name))
-				}
-				db, err = genDBWithDsn(suffixDsn)
-				if err != nil {
-					return err
-				}
-				store.dbPool[suffix.(string)] = db
-			}
+// 	// 处理库分区时的表迁移
+// 	case SHADING_MODEL_DB:
+// 		for _, suffix := range store.shardingSuffixs {
+// 			if suffixs != "" && suffixs != suffix {
+// 				continue
+// 			}
+// 			db := store.dbPool[suffix]
+// 			if db == nil {
+// 				suffixDsn := dsn.CopyDsn(store.dsn)
+// 				suffixDsn.Name = fmt.Sprintf("%s_%s", suffixDsn.Name, strings.ToLower(suffix))
+// 				if suffixDsn.Type == dsn.DSN_TYPE_PGSQL {
+// 					datname := ""
+// 					store.db.Table("pg_database").Where(" datname = ?", suffixDsn.Name).Select("datname").Find(&datname)
+// 					if datname != suffixDsn.Name {
+// 						store.db.Exec(fmt.Sprintf(`%s %s ;`, "create database ", suffixDsn.Name))
+// 					}
+// 				} else {
+// 					store.db.Exec(fmt.Sprintf(`%s %s ;`, "create database if not exists", suffixDsn.Name))
+// 				}
+// 				db, err = genDBWithDsn(suffixDsn)
+// 				if err != nil {
+// 					return err
+// 				}
+// 				store.dbPool[suffix] = db
+// 			}
 
-			tx.Statement.ConnPool = db.Config.ConnPool
-			if strings.Contains(env.Active().DBInit(), tableName) ||
-				env.Active().DBInit() == TABLE_INIT_ALL {
-				// 分区表在重置主表时也全部重置
-				err = tx.Table(tableName).Migrator().DropTable(tabler)
-				if err != nil {
-					return
-				}
-			}
-			err = tx.Table(tableName).Migrator().AutoMigrate(tabler)
-			if err != nil {
-				return
-			}
-		}
-	}
-	return nil
-}
+// 			tx.Statement.ConnPool = db.Config.ConnPool
+// 			if strings.Contains(env.Active().DBInit(), tableName) ||
+// 				env.Active().DBInit() == TABLE_INIT_ALL {
+// 				// 分区表在重置主表时也全部重置
+// 				err = tx.Table(tableName).Migrator().DropTable(tabler)
+// 				if err != nil {
+// 					return
+// 				}
+// 			}
+// 			err = tx.Table(tableName).Migrator().AutoMigrate(tabler)
+// 			if err != nil {
+// 				return
+// 			}
+// 		}
+// 	}
+// 	return nil
+// }

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2024-08-15 07:46:49
+ * @LastEditTime: 2024-10-05 00:20:28
  * @Description: 回掉函数
  */
 package rdb
@@ -57,12 +57,7 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	if ok {
 		skDBs = skDB.(string)
 	}
-	// // 如果子查询, 则不再重复生成查询条件
-	// columnI, ok := tx.Get(TX_SUB_QUERY_COLUMN_KEY)
-	// if columnI != nil && ok {
-	// 	return
-	// }
-	// fmt.Println(tx.Statement.Selects)
+
 	if tx.Statement.BuildClauses != nil {
 		switch tx.Statement.BuildClauses[0] {
 		case "SELECT":
@@ -94,9 +89,9 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 			db := store.dbPool[sk.(string)]
 			if db != nil && sks != skDBs {
 				tx.Statement.ConnPool = db.Config.ConnPool
-				if sub != nil {
-					sub.Statement.ConnPool = db.Config.ConnPool
-				}
+			}
+			if sub != nil {
+				sub.Statement.ConnPool = tx.Statement.ConnPool
 			}
 		default:
 		}

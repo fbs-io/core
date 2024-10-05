@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2024-08-14 07:24:57
  * @LastEditors: reel
- * @LastEditTime: 2024-08-16 07:31:22
+ * @LastEditTime: 2024-10-05 00:01:14
  * @Description: 管理表结构
  */
 package rdb
@@ -11,6 +11,7 @@ import "time"
 
 const (
 	TABLE_SYSTEM_CORE_ENTITYINFO = "e_sys_core_entityinfo"
+	TABLE_SYSTEM_CORE_SHARDING   = "e_sys_core_sharding"
 )
 
 type EntityInfo struct {
@@ -27,4 +28,14 @@ type EntityInfo struct {
 
 func (t *EntityInfo) TableaName() string {
 	return TABLE_SYSTEM_CORE_ENTITYINFO
+}
+
+// 分区后缀
+type Sharding struct {
+	Suffix string `gorm:"unique"` // 分区后缀
+
+}
+
+func (t *Sharding) TableName() string {
+	return TABLE_SYSTEM_CORE_SHARDING
 }

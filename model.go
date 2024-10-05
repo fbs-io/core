@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2024-08-02 22:17:46
+ * @LastEditTime: 2024-10-05 15:53:17
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -39,7 +39,11 @@ const (
 	SOURCE_ROUTER_NAN int8 = 0 // 不返回路由
 	SOURCE_ROUTER_IS  int8 = 1 // 返回路由, 默认菜单返回路由, 也可以单独设置按钮作为路由返回
 
-	TABLE_SYSTEM_CORE_RESOURCE = "e_sys_resources"
+	// 表名
+	// 资源表
+	TABLE_SYSTEM_CORE_RESOURCE = "e_sys_core_resources"
+	// 操作日志表
+	TABLE_SYSTEM_CORE_OPERATELOG = "e_sys_core_operatelog"
 )
 
 // 系统资源表
@@ -172,4 +176,21 @@ func (e *Resources) ColumnNameWithCode() string {
 
 func (e *Resources) ParentCode() string {
 	return e.PCode
+}
+
+type OperateLog struct {
+	IP        string `json:"ip" gorm:"操作ip;index"`
+	User      string `json:"oper" gorm:"comment:操作用户;index"`
+	Content   string `json:"content" gorm:"comment:业务操作内容"`
+	Result    string `json:"result" gorm:"comment:结果"`
+	Method    string `json:"method" gorm:"comment:请求方法;index"`
+	Api       string `json:"api" gorm:"comment:操作接口;index"`
+	ApiName   string `json:"api_name" gorm:"comment:接口名称"`
+	TraceID   string `json:"trace_id" gorm:"comment:链路id;index"`
+	OperateID string `json:"operate_id" gorm:"comment:操作id;index"` // 部分页面会增加重复提交id
+	rdb.ShardingModel
+}
+
+func (o *OperateLog) TableName() string {
+	return TABLE_SYSTEM_CORE_OPERATELOG
 }

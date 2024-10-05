@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2024-08-28 07:07:26
+ * @LastEditTime: 2024-10-05 00:04:08
  * @Description: 常用的中间件
  */
 package core
@@ -295,7 +295,7 @@ func LimiterMiddleware(c Core) gin.HandlerFunc {
 func TraceMiddleware(c Core, hasUiTrace bool) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		traceID := ctx.Request.Header.Get(consts.REQUEST_HEADER_TRACE_ID)
-		if traceID == "" {
+		if traceID == "" && !allowSource[requestKey(ctx)] && !strings.Contains(ctx.Request.RequestURI, STATIC_PATH_PREFIX) {
 			if hasUiTrace {
 				ctx.JSON(200, errno.ERRNO_NO_TRACE_REQUESTS.ToMap())
 				ctx.Abort()
