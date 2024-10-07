@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2024-10-05 16:14:18
+ * @LastEditTime: 2024-10-07 20:08:34
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -36,6 +36,7 @@ const (
 	CTX_TX                  = "ctx_tx"                       // 上下文的数据库信息
 	CTX_PARAMS              = "ctx_params"                   // 上下文的参数
 	CTX_AUTH                = consts.CTX_AUTH                // 上下文的操作用户
+	CTX_AUTH_CACHE          = "ctx_auth_cache"               // 上下文的用户数据缓存
 	CTX_LOG_CONTENT         = "ctx_operate_log_content"      // 上下文的操作内容
 	CTX_REFLECT_VALUE       = "reflect_value"                // 上下文中的反射值,用于自动校验并生成参数
 	CTX_SHARDING_KEY        = consts.CTX_SHARDING_KEY        // 上下文的数据分区
@@ -125,6 +126,9 @@ type Context interface {
 
 	// gin的next方法
 	Next()
+
+	// gin的abort方法
+	Abort()
 
 	// 上下文相关
 	Ctx() *gin.Context
@@ -318,7 +322,7 @@ func (c *context) Path() string {
 
 // Path 请求的路径(不附带querystring)
 func (c *context) Resource() string {
-	return fmt.Sprintf("%s:%s", c.ctx.Request.Method, c.ctx.FullPath())
+	return fmt.Sprintf("%s%s", strings.ToLower(c.ctx.Request.Method), strings.ReplaceAll(c.ctx.FullPath(), "/", ":"))
 }
 
 // URI unescape后的uri
@@ -387,6 +391,10 @@ func (c *context) CtxSet(key string, v interface{}) {
 
 func (c *context) Next() {
 	c.ctx.Next()
+}
+
+func (c *context) Abort() {
+	c.ctx.Abort()
 }
 
 type txOpts struct {

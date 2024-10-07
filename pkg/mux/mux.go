@@ -3,7 +3,7 @@
  * @Params: 可变参数, 可以指定端口号, 服务名称,
  * @Author: LenLee
  * @Date: 2022-06-24 21:59:45
- * @LastEditTime: 2024-03-30 10:18:00
+ * @LastEditTime: 2024-10-07 00:12:06
  * @LastEditors: reel
  * @FilePath:
  */
@@ -125,6 +125,7 @@ func (h *httpServer) Start() error {
 			return errorx.Wrap(err, fmt.Sprintf("%s发生错误", h.name))
 		}
 	}
+
 	return errorx.Wrap(err, fmt.Sprintf("%s发生错误", h.name))
 }
 

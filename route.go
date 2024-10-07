@@ -32,10 +32,18 @@ func wrapHandlers(c Core, handlers ...HandlerFunc) []gin.HandlerFunc {
 //
 // 传入相对路由路径和名称, 用于在菜单中进行注册
 type RouterGroup interface {
+	// 创建分组
 	Group(api, apiName string, handlers ...HandlerFunc) RouterGroup
-	IRoutes
-	RouterResource
+
+	// 设置中间件
+	Use(middleware ...gin.HandlerFunc) RouterGroup
+
+	// 获取core
 	Core() Core
+
+	IRoutes
+
+	RouterResource
 }
 
 var _ IRoutes = (*router)(nil)
@@ -417,5 +425,10 @@ func (r *router) Core() Core {
 // 设置前端Meta信息
 func (r *router) WithMeta(key string, value interface{}) RouterGroup {
 	r.resource.Meta[key] = value
+	return r
+}
+
+func (r *router) Use(middleware ...gin.HandlerFunc) RouterGroup {
+	r.group.Use(middleware...)
 	return r
 }

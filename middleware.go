@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2024-10-05 00:04:08
+ * @LastEditTime: 2024-10-07 10:12:04
  * @Description: 常用的中间件
  */
 package core
@@ -154,7 +154,7 @@ func SetSeesionType(sessionType string) SignatureOptFunc {
 
 // 校验签名中间件
 // 如果没有登陆, 则会给一个默认的签名
-// Singular: 默认 token 模式， 同时可以选择cookie，sid, csrftoken方式
+// Singular: 默认 CSRF-TOKEN 模式， 同时可以选择cookie，sid, token方式
 func SignatureMiddleware(c Core, sop ...SignatureOptFunc) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		if strings.Contains(ctx.Request.RequestURI, STATIC_PATH_PREFIX) {
@@ -162,20 +162,17 @@ func SignatureMiddleware(c Core, sop ...SignatureOptFunc) gin.HandlerFunc {
 			return
 		}
 
-		startTime := time.Now()
-		logx.APP.Debug("SignatureMiddleware 签名校验开始",
-			logx.Context(ctx),
-		)
-		defer logx.APP.Debug("SignatureMiddleware 签名校验结束",
-			logx.Context(ctx),
-			logx.DiffTime(startTime),
-		)
 		if allowSource[requestKey(ctx)] {
 			logx.APP.Debug("SignatureMiddleware 例外的请求接口无需校验",
 				logx.Context(ctx),
 			)
 			return
 		}
+
+		startTime := time.Now()
+		logx.APP.Debug("SignatureMiddleware 签名校验开始",
+			logx.Context(ctx),
+		)
 
 		var (
 			sessionKey    string
@@ -222,6 +219,7 @@ func SignatureMiddleware(c Core, sop ...SignatureOptFunc) gin.HandlerFunc {
 		ctx.Set(CTX_AUTH, sessiionValue)
 		logx.APP.Debug("SignatureMiddleware 签名校验通过, 用户信息写入上下文传递",
 			logx.Context(ctx),
+			logx.DiffTime(startTime),
 		)
 
 	}
@@ -306,5 +304,53 @@ func TraceMiddleware(c Core, hasUiTrace bool) gin.HandlerFunc {
 		trace := &trace.Trace{TraceID: traceID}
 		ctx.Set(consts.CTX_TRACE_ID, trace)
 		ctx.Next()
+	}
+}
+
+// 自定义core.HandlerFunc 中间件
+//
+// 用于各个路由组使用
+
+// 链路中间件
+func TraceMiddlewareCore(hasUiTrace bool) HandlerFunc {
+	return func(ctx Context) {
+		TraceMiddleware(ctx.Core(), hasUiTrace)(ctx.Ctx())
+	}
+}
+
+// 限流器
+func LimiterMiddlewareCore() HandlerFunc {
+	return func(ctx Context) {
+		LimiterMiddleware(ctx.Core())(ctx.Ctx())
+	}
+}
+
+// 参数中间件
+func ParamsMiddlewareCore() HandlerFunc {
+	return func(ctx Context) {
+		ParamsMiddleware(ctx.Core())(ctx.Ctx())
+	}
+}
+
+// 校验签名中间件
+// 如果没有登陆, 则会给一个默认的签名
+// Singular: 默认 CSRF-TOKEN 模式， 同时可以选择cookie，sid, token方式
+func SignatureMiddlewareCore(sop ...SignatureOptFunc) HandlerFunc {
+	return func(ctx Context) {
+		SignatureMiddleware(ctx.Core())(ctx.Ctx())
+	}
+}
+
+// 日志中间件
+func LogMiddlewareCore() HandlerFunc {
+	return func(ctx Context) {
+		LogMiddleware(ctx.Core())(ctx.Ctx())
+	}
+}
+
+// 跨域处理中间件
+func CorsMiddlewareCore() HandlerFunc {
+	return func(ctx Context) {
+		CorsMiddleware(ctx.Core())(ctx.Ctx())
 	}
 }

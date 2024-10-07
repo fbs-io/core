@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-06 19:21:05
  * @LastEditors: reel
- * @LastEditTime: 2024-03-26 07:48:26
+ * @LastEditTime: 2024-10-06 21:32:03
  * @Description: session 模块
  */
 package session
@@ -42,19 +42,41 @@ type Session interface {
 	sessionP()
 	CookieName() string
 	Singular() string // 是否单用户登陆, Y表示是, N或空表示否
+
+	// Tokne
+	// 设置token
 	SetWithToken(sessionKey, sessionValue string)
-	GetWithCookie(r *http.Request) (cookieValue, value string, err error)
-	SetWithCookie(w http.ResponseWriter, cookieValue, internalValue string)
+	// 获取token
 	GetWithToken(r *http.Request) (sessionKey, sessionValue string, err error)
+	// 删除token
+	DeleteWithToken(sessionKey string) error
+
+	// Cookie
+	// 获取cookie
+	GetWithCookie(r *http.Request) (cookieValue, value string, err error)
+	// 设置cookie
+	SetWithCookie(w http.ResponseWriter, cookieValue, internalValue string)
+	// 删除cookie
+	DeleteWithCookie(w http.ResponseWriter, sessionKey string) error
+	// 用于设置默认cookie的场景
+	// 如防止中间人攻击等情况
 	GetSessionWithCookie(r *http.Request, w http.ResponseWriter) (sessionValue string, err error)
+
+	// SID
+	// 通过sid设置session
 	SetWithSid(w http.ResponseWriter, cookieValue, internalValue string)
+	// 通过sid获取session
 	GetWithSid(r *http.Request) (sessionKey, sessionValue string, err error)
+	// 通过sid删除session
+	DeleteWithSid(w http.ResponseWriter, sessionKey string) error
 
-	// 服务端想客户端设置cookie, 使用请求头的X-CSRF-TOKEN字段
+	// CsrfToken
+	// 服务端向客户端设置cookie, 使用请求头的X-CSRF-TOKEN字段
 	SetWithCsrfToken(w http.ResponseWriter, cookieValue, internalValue string)
-
 	// 客户端发送请求, 使用cookie传输
 	GetWithCsrfToken(r *http.Request) (sessionKey, sessionValue string, err error)
+	// 删除csrfToken
+	DeleteWithCsrfToken(w http.ResponseWriter, sessionKey string) error
 }
 
 func (s *session) sessionP() {}
@@ -136,6 +158,25 @@ func (s *session) CookieName() string {
 	return s.cookieName
 }
 
+// 删除cookie
+func (s *session) DeleteWithCookie(w http.ResponseWriter, sessionKey string) error {
+
+	cookie := &http.Cookie{
+		Name:     "",
+		Value:    url.QueryEscape(""),
+		MaxAge:   s.lifeTime,
+		Path:     "/",
+		Domain:   "",
+		SameSite: 4,
+		Secure:   false,
+		HttpOnly: true,
+	}
+	http.SetCookie(w, cookie)
+
+	return s.deleteSession(sessionKey)
+
+}
+
 // 用于设置默认cookie的场景
 // 如防止中间人攻击等情况
 func (s *session) GetSessionWithCookie(r *http.Request, w http.ResponseWriter) (sessionValue string, err error) {
@@ -154,6 +195,11 @@ func (s *session) GetWithToken(r *http.Request) (sessionKey, sessionValue string
 	token := r.Header.Get("Authorization")
 	sessionKey, _ = url.QueryUnescape(token)
 	return s.getSession(sessionKey)
+}
+
+// 删除token
+func (s *session) DeleteWithToken(sessionKey string) error {
+	return s.deleteSession(sessionKey)
 }
 
 func GenSessionKey() string {
@@ -186,6 +232,12 @@ func (s *session) GetWithSid(r *http.Request) (sessionKey, sessionValue string, 
 	return s.getSession(sessionKey)
 }
 
+// 通过sid删除session
+func (s *session) DeleteWithSid(w http.ResponseWriter, sessionKey string) error {
+	w.Header().Set("SID", "")
+	return s.deleteSession(sessionKey)
+}
+
 // 自动生成session的值, 36位长度
 // 同时把session写入缓存中请求头X-CSRF-TOKEN中
 // 如果没有设置缓存的值, 以cookie名称补充, 表示为未登陆用户
@@ -210,6 +262,11 @@ func (s *session) GetWithCsrfToken(r *http.Request) (sessionKey, sessionValue st
 		sessionKey = auths[1]
 	}
 	return s.getSession(sessionKey)
+}
+
+func (s *session) DeleteWithCsrfToken(w http.ResponseWriter, sessionKey string) error {
+	w.Header().Set("X-CSRF-TOKEN", "")
+	return s.deleteSession(sessionKey)
 }
 
 func (s *session) GenStoreKey(sessionKey string) string {
@@ -250,4 +307,12 @@ func (s *session) getSession(sessionKey string) (sessionKey2, sessionValue strin
 		}
 	}
 	return sessionKey, sessionValue, nil
+}
+
+// 删除session
+func (s *session) deleteSession(sessionKey string) error {
+	if s.singular == "Y" {
+		return s.store.Del(sessionKey)
+	}
+	return s.store.Del(s.GenStoreKey(sessionKey))
 }

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2024-10-04 13:24:08
+ * @LastEditTime: 2024-10-06 23:02:06
  * @Description: 管理核心组件的启动和运行
  */
 package core
@@ -84,6 +84,7 @@ func New(funcs ...FuncCores) (Core, error) {
 	var opt = &options{
 		limitSize:   200 * runtime.NumCPU(),
 		limitNumber: 200 * runtime.NumCPU(),
+		sessionTTL:  1800,
 	}
 	for _, fs := range funcs {
 		fs(opt)
@@ -128,7 +129,7 @@ func New(funcs ...FuncCores) (Core, error) {
 	}
 
 	// session配置
-	c.session = session.New(session.Store(c.cache), session.Prefix("app::session"))
+	c.session = session.New(session.Store(c.cache), session.Prefix("app::session"), session.Lifetime(opt.sessionTTL))
 	// 配置中心和其他服务分开启动和关闭
 
 	msc.Init(c.msc.Engine(), c.config, c.cache, c.cron)

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-23 22:01:29
  * @LastEditors: reel
- * @LastEditTime: 2024-10-05 11:45:46
+ * @LastEditTime: 2024-10-06 23:00:39
  * @Description: 初始化core配置
  */
 
@@ -14,6 +14,7 @@ type options struct {
 	appName       string // 设置应用名称
 	appVersion    string // 设置应用版本
 	shardingModel int8   // 分区模式
+	sessionTTL    int    // session过期时间
 }
 
 type FuncCores func(*options)
@@ -49,6 +50,13 @@ func SetAppVersion(appVersion string) FuncCores {
 func SetShardingModel(model int8) FuncCores {
 	return func(opt *options) {
 		opt.shardingModel = model
+	}
+}
+
+// 设置 session过期时间
+func SetSessionTTL(ttl int) FuncCores {
+	return func(opt *options) {
+		opt.sessionTTL = ttl
 	}
 }
 

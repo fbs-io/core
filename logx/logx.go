@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-04 22:37:35
  * @LastEditors: reel
- * @LastEditTime: 2024-08-27 07:25:12
+ * @LastEditTime: 2024-10-07 01:31:34
  * @Description: 请填写简介
  */
 package logx
@@ -242,8 +242,8 @@ func (log *logger) Entity(infoF ...EntityFunc) (entity *logrus.Entry) {
 			}
 			entity = log.log.WithFields(logrus.Fields{consts.TRACE_ID: tv.TraceID}).
 				WithFields(infos.fields)
+			return
 		}
-		return
 	}
 	entity = log.log.WithFields(infos.fields)
 	return
