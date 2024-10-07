@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2024-10-07 20:08:34
+ * @LastEditTime: 2024-10-08 00:43:14
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -118,8 +118,14 @@ type Context interface {
 	Method() string
 
 	// resource 获取 请求方式和全路径拼接好的字符串
+	//
 	// 如GET:/api/v1/userlist
 	Resource() string
+
+	// 生成资源code
+	//
+	// 格式: get:api:user:list
+	ResourceCode() string
 
 	// 终止并返回信息
 	AbortWithError(interface{})
@@ -321,7 +327,16 @@ func (c *context) Path() string {
 }
 
 // Path 请求的路径(不附带querystring)
+//
+// 格式:GET:/api/xxxxx
 func (c *context) Resource() string {
+	return requestKey(c.ctx)
+}
+
+// 生成资源code
+//
+// 格式: get:api:user:list
+func (c *context) ResourceCode() string {
 	return fmt.Sprintf("%s%s", strings.ToLower(c.ctx.Request.Method), strings.ReplaceAll(c.ctx.FullPath(), "/", ":"))
 }
 
@@ -339,6 +354,13 @@ func (c *context) JSON(data interface{}, funcs ...FuncOperateOpt) {
 
 	en, ok := data.(errno.Errno)
 	if ok {
+
+		if en.Code() != 0 {
+			resource := resourcesMap[c.ResourceCode()]
+			if resource != nil {
+				en = en.Api(resource.Desc)
+			}
+		}
 		c.ctx.JSON(en.HTTPCode(), en.ToMap())
 
 		// 操作日志

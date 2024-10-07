@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-04 15:27:47
  * @LastEditors: reel
- * @LastEditTime: 2023-06-14 22:22:31
+ * @LastEditTime: 2024-10-08 00:38:17
  * @Description: 请填写简介
  */
 /**
@@ -27,7 +27,7 @@ export default (error, vm)=>{
 	}
 	var errorName = errorMap[error.name] || "未知错误"
 
-	console.warn(`[MSCUI error]: ${error}`);
+	console.warn(`[FMSC error]: ${error}`);
 	console.error(error);
 	//throw error;
 

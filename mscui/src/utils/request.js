@@ -61,7 +61,7 @@ axios.interceptors.response.use(
 		}else{
 				ElNotification.error({
 					title: '请求发生错误',
-					message: response.data.message
+					message: response.data.api + response.data.message
 				})
 			
 

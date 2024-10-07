@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 22:19:24
  * @LastEditors: reel
- * @LastEditTime: 2024-10-05 16:04:10
+ * @LastEditTime: 2024-10-08 00:34:14
  * @Description: API 常用状态码
  */
 package errno
@@ -25,6 +25,7 @@ type Errno interface {
 	WrapError(err error) Errno
 	Details() interface{}
 	Notify() Errno
+	Api(api string) Errno
 }
 
 type code struct {
@@ -36,6 +37,7 @@ type code struct {
 	isStack    bool        // 是否加载堆栈信息
 	isNotify   bool        // 是否通知
 	isConst    bool        // 是否是常量
+	api        string      // 错误接口
 }
 
 // 生成新的 code 暂时不需要调用错误堆栈错误, 需要时再调用
@@ -51,8 +53,20 @@ func New(httpCode, errno int, msg string) Errno {
 func (e *code) en() {}
 
 func (e *code) WithStack(err error) Errno {
-	e.isStack = true
-	e.stackError = errorx.WithStack(err)
+	if e.isConst {
+		en := &code{
+			httpCode:   e.httpCode,
+			errno:      e.errno,
+			message:    e.message,
+			stackError: errorx.WithStack(err),
+			details:    e.details,
+			isStack:    true,
+			isNotify:   e.isNotify,
+			api:        e.api,
+		}
+		return en
+
+	}
 	return e
 }
 
@@ -72,6 +86,7 @@ func (e *code) Stack() error {
 	return e.stackError
 }
 
+// 包含所有返回值
 func (e *code) ToMap() (res map[string]interface{}) {
 	res = map[string]interface{}{
 		"errno":   e.errno,
@@ -90,9 +105,13 @@ func (e *code) ToMap() (res map[string]interface{}) {
 	if e.isNotify {
 		res["notify"] = e.isNotify
 	}
+	if e.api != "" {
+		res["api"] = e.api
+	}
 	return res
 }
 
+// 仅包含 errno, message, details三个返回值
 func (e *code) ToMapWithData(data interface{}) map[string]interface{} {
 	return map[string]interface{}{
 		"errno":   e.errno,
@@ -101,6 +120,7 @@ func (e *code) ToMapWithData(data interface{}) map[string]interface{} {
 	}
 }
 
+// 仅包含 errno, message 两个返回值
 func (e *code) ToMapWithError(err error) map[string]interface{} {
 	var errStr string
 	if err != nil {
@@ -123,6 +143,7 @@ func (e *code) WrapData(details interface{}) Errno {
 			details:    details,
 			isStack:    e.isStack,
 			isNotify:   e.isNotify,
+			api:        e.api,
 		}
 		return en
 
@@ -141,12 +162,15 @@ func (e *code) WrapError(err error) Errno {
 			details:    err.Error(),
 			isStack:    e.isStack,
 			isNotify:   e.isNotify,
+			api:        e.api,
 		}
 		return en
 	}
 	e.details = err.Error()
 	return e
 }
+
+// 通知消息
 func (e *code) Notify() Errno {
 	if e.isConst {
 		en := &code{
@@ -157,6 +181,7 @@ func (e *code) Notify() Errno {
 			details:    e.details,
 			isStack:    e.isStack,
 			isNotify:   true,
+			api:        e.api,
 		}
 		return en
 	}
@@ -166,4 +191,22 @@ func (e *code) Notify() Errno {
 
 func (e *code) Details() interface{} {
 	return e.details
+}
+
+func (e *code) Api(api string) Errno {
+	if e.isConst {
+		en := &code{
+			httpCode:   e.httpCode,
+			errno:      e.errno,
+			message:    e.message,
+			stackError: e.stackError,
+			details:    e.details,
+			isStack:    e.isStack,
+			isNotify:   e.isNotify,
+			api:        api,
+		}
+		return en
+	}
+	e.api = api
+	return e
 }

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-06 19:21:05
  * @LastEditors: reel
- * @LastEditTime: 2024-10-06 21:32:03
+ * @LastEditTime: 2024-10-08 00:10:33
  * @Description: session 模块
  */
 package session
@@ -273,6 +273,11 @@ func (s *session) GenStoreKey(sessionKey string) string {
 	return fmt.Sprintf("%s::%s", s.prefix, sessionKey)
 }
 
+// 生成最后一次签名登陆key
+func (s *session) genLastSingularKey(sessionKey string) string {
+	return fmt.Sprintf("%s::last:::singular::%s", s.prefix, sessionKey)
+}
+
 // 获取session是否单用户登陆
 func (s *session) Singular() string {
 	return s.singular
@@ -282,7 +287,7 @@ func (s *session) Singular() string {
 func (s *session) setSession(sessionKey, sessionValue string) {
 	s.store.Set(s.GenStoreKey(sessionKey), sessionValue, cache.SetTTL(time.Duration(s.lifeTime)))
 	if s.singular == "Y" {
-		s.store.Set(sessionValue, sessionKey)
+		s.store.Set(s.genLastSingularKey(sessionValue), sessionKey)
 	}
 }
 
@@ -297,7 +302,7 @@ func (s *session) getSession(sessionKey string) (sessionKey2, sessionValue strin
 		return "", "", ERROR_SESSION_NOT_LOGIN
 	}
 	if s.singular == "Y" {
-		lastKey := s.store.Get(sessionValue)
+		lastKey := s.store.Get(s.genLastSingularKey(sessionValue))
 		if lastKey == "" {
 			s.store.Set(sessionValue, sessionKey, cache.SetTTL(1800))
 		} else {
@@ -310,9 +315,14 @@ func (s *session) getSession(sessionKey string) (sessionKey2, sessionValue strin
 }
 
 // 删除session
-func (s *session) deleteSession(sessionKey string) error {
+func (s *session) deleteSession(sessionKey string) (err error) {
 	if s.singular == "Y" {
-		return s.store.Del(sessionKey)
+		sessionValue := s.store.Get(s.GenStoreKey(sessionKey))
+		err = s.store.Del(s.genLastSingularKey(sessionValue))
+		if err != nil {
+			s.store.Del(s.GenStoreKey(sessionKey))
+			return
+		}
 	}
 	return s.store.Del(s.GenStoreKey(sessionKey))
 }
