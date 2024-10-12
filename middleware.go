@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-07-19 00:08:08
  * @LastEditors: reel
- * @LastEditTime: 2024-10-07 10:12:04
+ * @LastEditTime: 2024-10-10 23:49:14
  * @Description: 常用的中间件
  */
 package core
@@ -102,8 +102,9 @@ func LogMiddleware(c Core) gin.HandlerFunc {
 					logx.F("req_url", ctx.Request.RequestURI),
 					logx.F("error", fmt.Sprintf("msg: %v, stack: %s", err, string(debug.Stack()))),
 				)
-				ctx.JSON(200, errno.ERRNO_SYSTEM.ToMapWithError(errorx.Errorf("%v", err)))
-				ctx.Abort()
+				if !ctx.Writer.Written() {
+					ctx.JSON(500, errno.ERRNO_SYSTEM.ToMapWithError(errorx.Errorf("%v", err)))
+				}
 				return
 			}
 			logx.APP.Info("http请求结束", logx.F("status", ctx.Writer.Status()),
@@ -283,7 +284,6 @@ func LimiterMiddleware(c Core) gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
-		ctx.Next()
 	}
 }
 
@@ -303,7 +303,6 @@ func TraceMiddleware(c Core, hasUiTrace bool) gin.HandlerFunc {
 		}
 		trace := &trace.Trace{TraceID: traceID}
 		ctx.Set(consts.CTX_TRACE_ID, trace)
-		ctx.Next()
 	}
 }
 

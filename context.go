@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2024-10-08 00:43:14
+ * @LastEditTime: 2024-10-12 23:46:34
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -603,12 +603,11 @@ func (ctx *context) LogFatal(msg string, infoF ...logx.EntityFunc) {
 	logx.APP.Fatal(msg, append(infoF, logx.Context(ctx.ctx))...)
 }
 
-func setOperateLog(ctx Context, en errno.Errno, funcs ...FuncOperateOpt) {
+func setOperateLog(ctx *context, en errno.Errno, funcs ...FuncOperateOpt) {
 	defer func() {
-		setFreeCtx(ctx)
 		if err := recover(); err != nil {
-			logx.Sys.Error("写入操作日志发生错误", logx.F("status", ctx.Ctx().Writer.Status()),
-				logx.Context(ctx.Ctx()),
+			logx.Sys.Error("写入操作日志发生错误", logx.F("status", ctx.ctx.Writer.Status()),
+				logx.Context(ctx.ctx),
 			)
 			return
 		}
@@ -626,7 +625,7 @@ func setOperateLog(ctx Context, en errno.Errno, funcs ...FuncOperateOpt) {
 	resource := resourcesMap[fmt.Sprintf("%s%s", strings.ToLower(ctx.Ctx().Request.Method), strings.Replace(ctx.Ctx().FullPath(), "/", ":", -1))]
 
 	auth := ""
-	authI, ok := ctx.Ctx().Get(CTX_AUTH)
+	authI, ok := ctx.ctx.Get(CTX_AUTH)
 	if ok {
 		auth = authI.(string)
 	}
@@ -652,15 +651,15 @@ func setOperateLog(ctx Context, en errno.Errno, funcs ...FuncOperateOpt) {
 		content = opt.content
 	}
 	operateLog := &OperateLog{
-		IP:        ctx.Ctx().ClientIP(),
+		IP:        ctx.ctx.ClientIP(),
 		User:      auth,
 		Content:   content,
 		Result:    res,
-		Method:    ctx.Ctx().Request.Method,
-		Api:       ctx.Ctx().Request.RequestURI,
+		Method:    ctx.ctx.Request.Method,
+		Api:       ctx.ctx.Request.RequestURI,
 		ApiName:   resource.Desc,
-		TraceID:   ctx.Ctx().Request.Header.Get(consts.REQUEST_HEADER_TRACE_ID),
-		OperateID: ctx.Ctx().Request.Header.Get(consts.REQUEST_HEADER_OPERATE_ID),
+		TraceID:   ctx.ctx.Request.Header.Get(consts.REQUEST_HEADER_TRACE_ID),
+		OperateID: ctx.ctx.Request.Header.Get(consts.REQUEST_HEADER_OPERATE_ID),
 	}
 	operateLog.ShadingKey = ctx.ShardingKey()
 	err := ctx.Core().RDB().DB().Create(operateLog).Error
