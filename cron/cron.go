@@ -2,13 +2,14 @@
  * @Author: reel
  * @Date: 2023-05-16 20:44:40
  * @LastEditors: reel
- * @LastEditTime: 2023-09-12 06:04:50
+ * @LastEditTime: 2024-12-07 23:58:14
  * @Description: 配置定时任务
  */
 package cron
 
 import (
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -94,7 +95,7 @@ func (c *cron) AddJob(f func(), name string, interval int) {
 				if job.failCount >= 3 {
 					job.isRunning = false
 				}
-				fmt.Println(fmt.Sprintf("定时作业:[%s]发生错误:%v", name, err))
+				fmt.Printf("定时作业:[%s]发生错误:%v\n%s", name, err, string(debug.Stack()))
 				return
 			}
 			job.failCount = 0

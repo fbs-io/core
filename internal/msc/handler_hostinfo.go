@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-10 20:16:56
  * @LastEditors: reel
- * @LastEditTime: 2023-09-12 06:20:32
+ * @LastEditTime: 2024-12-15 16:28:49
  * @Description: 请填写简介
  */
 package msc
@@ -104,18 +104,24 @@ func (m *handler) getProcessInfo() processInfos {
 	var procinfos = make(processInfos, 0, 100)
 	processes, _ := process.Processes()
 	for _, p := range processes {
+		if p == nil {
+			continue
+		}
 		cpuPercent, _ := p.CPUPercent()
 		if cpuPercent < 0.01 {
 			continue
 		}
 
 		var procinfo = processInfo{}
-		mem, _ := p.MemoryInfo()
+		mem, err := p.MemoryInfo()
+		if err != nil || mem == nil {
+			procinfo.MemInfo = mem.RSS / mb
+		}
 		procinfo.PID = p.Pid
 		procinfo.IO, _ = p.IOnice()
 		procinfo.PName, _ = p.Name()
-		procinfo.MemInfo = mem.RSS / mb
 		procinfo.CpuPercent = cpuPercent
+
 		procinfos = append(procinfos, procinfo)
 	}
 
