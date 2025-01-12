@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2024-10-12 23:46:34
+ * @LastEditTime: 2025-01-12 23:09:45
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -622,7 +622,7 @@ func setOperateLog(ctx *context, en errno.Errno, funcs ...FuncOperateOpt) {
 	if !opt.isSet && opt.content == "" && opt.result == nil {
 		return
 	}
-	resource := resourcesMap[fmt.Sprintf("%s%s", strings.ToLower(ctx.Ctx().Request.Method), strings.Replace(ctx.Ctx().FullPath(), "/", ":", -1))]
+	resource := resourcesMap[ctx.ResourceCode()]
 
 	auth := ""
 	authI, ok := ctx.ctx.Get(CTX_AUTH)
@@ -634,7 +634,6 @@ func setOperateLog(ctx *context, en errno.Errno, funcs ...FuncOperateOpt) {
 	if en.Code() != errno.ERRNO_OK.Code() {
 		res = "失败"
 	}
-
 	content := fmt.Sprintf("%s%s%v%s", auth, resource.Desc, opt.result, res)
 	if opt.result == nil {
 		content = fmt.Sprintf("%s%s%s", auth, resource.Desc, res)

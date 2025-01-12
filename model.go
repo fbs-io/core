@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2024-10-05 15:53:17
+ * @LastEditTime: 2024-12-28 22:38:55
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -187,7 +187,8 @@ type OperateLog struct {
 	Api       string `json:"api" gorm:"comment:操作接口;index"`
 	ApiName   string `json:"api_name" gorm:"comment:接口名称"`
 	TraceID   string `json:"trace_id" gorm:"comment:链路id;index"`
-	OperateID string `json:"operate_id" gorm:"comment:操作id;index"` // 部分页面会增加重复提交id
+	OperateID string `json:"operate_id" gorm:"comment:操作id;index"`   // 部分页面会增加重复提交id
+	CreatedAT uint   `json:"created_at" gorm:"autoCreateTime:milli"` // 创建时间
 	rdb.ShardingModel
 }
 
