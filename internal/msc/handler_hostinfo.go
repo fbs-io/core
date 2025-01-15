@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-10 20:16:56
  * @LastEditors: reel
- * @LastEditTime: 2024-12-15 16:28:49
+ * @LastEditTime: 2025-01-16 07:25:01
  * @Description: 请填写简介
  */
 package msc
@@ -114,7 +114,7 @@ func (m *handler) getProcessInfo() processInfos {
 
 		var procinfo = processInfo{}
 		mem, err := p.MemoryInfo()
-		if err != nil || mem == nil {
+		if err == nil || mem != nil {
 			procinfo.MemInfo = mem.RSS / mb
 		}
 		procinfo.PID = p.Pid
