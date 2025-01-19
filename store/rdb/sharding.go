@@ -2,16 +2,16 @@
  * @Author: reel
  * @Date: 2023-10-15 22:49:03
  * @LastEditors: reel
- * @LastEditTime: 2024-10-05 10:44:30
+ * @LastEditTime: 2025-01-19 23:40:42
  * @Description: 分区相关
  */
 package rdb
 
 import (
 	"fmt"
-	"reflect"
 	"strings"
 
+	"github.com/fbs-io/core/pkg/consts"
 	"github.com/fbs-io/core/pkg/env"
 	"github.com/fbs-io/core/pkg/errorx"
 	"github.com/fbs-io/core/store/dsn"
@@ -64,7 +64,7 @@ func (store *rdbStore) AddShardingTable(tableName string) {
 }
 
 // 项目启动时, 添加初始化执行的动作, 如迁移表等
-func (store *rdbStore) AddMigrateList(fs ...func() error) {
+func (store *rdbStore) AddMigrateList(fs ...RegisterFunc) {
 	store.migrateList = append(store.migrateList, fs...)
 }
 
@@ -84,6 +84,11 @@ func (store *rdbStore) AddShardingSuffixs(suffixs string) (err error) {
 
 	for tableName := range store.shardingAllTable {
 		err = store.AutoShardingTable(tableName, suffixs)
+		if err != nil {
+			return
+		}
+
+		err = store.AutoShardingTableMigrate(tableName, suffixs)
 		if err != nil {
 			return
 		}
@@ -108,53 +113,13 @@ func (store *rdbStore) DelShardingSuffix(suffixs string) error {
 //
 // 支持自定义用于分区迁移的表
 func (store *rdbStore) AutoShardingTable(tableName, suffixs string) (err error) {
+	entityInfo := store.GetEntityInfo(tableName)
+	if !entityInfo.IsSharding {
+		return
+	}
 	tabler := store.tablers[tableName]
 	if tabler == nil {
 		return errorx.Errorf("无法获取表名为:%s的表结构:", tableName)
-	}
-	entityInfo := &EntityInfo{}
-	// 通过反射获取模型中是否包含分区字段用于创建分区
-	rt := reflect.TypeOf(tabler).Elem()
-	rtModel, ok1 := rt.FieldByName("ShardingModel")
-	rtKey, ok2 := rt.FieldByName("ShadingKey")
-	// 通过多重判断, 确定模型中包含了分区字段
-	if ok1 && ok2 &&
-		rtKey.Name == "ShadingKey" &&
-		rtModel.Name == "ShardingModel" &&
-		strings.Contains(rtKey.Tag.Get("gorm"), "column:sk") {
-
-		store.shardingAllTable[tabler.TableName()] = true
-		entityInfo.IsSharding = true
-		entityInfo.ShardingModel = store.shardingModel
-	}
-	// 增加数据权限字段的判断
-	rtModel, ok1 = rt.FieldByName("DataPermissionStringModel")
-	rtKey, ok2 = rt.FieldByName("DataPermission")
-	if ok1 && ok2 &&
-		rtKey.Name == "DataPermission" &&
-		rtModel.Name == "DataPermissionStringModel" &&
-		strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
-
-		store.dataPermissionTable[tabler.TableName()] = true
-		store.dataPermissionTable["DataPermissionStringModel"] = true
-		entityInfo.IsDataPermission = true
-		entityInfo.DataPermissionType = "string"
-	} else {
-		// 增加数据权限字段的判断
-		rtModel, ok1 = rt.FieldByName("DataPermissionIntModel")
-		rtKey, ok2 = rt.FieldByName("DataPermission")
-		if ok1 && ok2 &&
-			rtKey.Name == "DataPermission" &&
-			rtModel.Name == "DataPermissionIntModel" &&
-			strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
-
-			store.dataPermissionTable[tabler.TableName()] = true
-			store.dataPermissionTable["DataPermissionIntModel"] = true
-
-			entityInfo.IsDataPermission = true
-			entityInfo.DataPermissionType = "int"
-		}
-
 	}
 
 	// 处理表迁移
@@ -221,15 +186,32 @@ func (store *rdbStore) AutoShardingTable(tableName, suffixs string) (err error) 
 			}
 		}
 	}
-	// 如果只有分区, 没有数据权限的表, 默认缓存不过期
-	entityInfo.CacheTTL = -1
 
-	// 如果有数据权限的表, 缓存1小时
-	if entityInfo.IsDataPermission {
-		entityInfo.CacheTTL = 3600
-	}
-	store.entityInfo[tableName] = entityInfo
 	return nil
+}
+
+// 自动迁移执行各分区初始化
+func (store *rdbStore) AutoShardingTableMigrate(table, skString string) (err error) {
+	if store.shardingTableMigrateList[table] == nil {
+		return
+	}
+	if !store.entityInfo[table].IsMigrator {
+		return
+	}
+	for _, suffix := range store.shardingSuffixs {
+		if skString != "" && skString != suffix {
+			continue
+		}
+		db := store.db.Where("1=1").Set(consts.CTX_SHARDING_KEY, suffix)
+
+		for _, f := range store.shardingTableMigrateList[table] {
+			err = f(db)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return
 }
 
 // 设置分区后缀

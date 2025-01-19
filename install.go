@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2024-10-05 00:00:55
+ * @LastEditTime: 2025-01-19 20:06:37
  * @Description: 系统配置相关操作
  */
 package core
@@ -21,6 +21,7 @@ import (
 	"github.com/fbs-io/core/service"
 	"github.com/fbs-io/core/store/dsn"
 	"github.com/fbs-io/core/store/rdb"
+	"gorm.io/gorm"
 
 	"github.com/gin-gonic/gin"
 )
@@ -80,7 +81,9 @@ func (c *core) install() (err error) {
 	c.rdb.Register(&rdb.Sharding{})
 
 	s := &Resources{}
-	c.rdb.Register(s, func() error { return c.rdb.DB().Table(s.TableName()).CreateInBatches(resources, len(resources)).Error })
+	c.rdb.Register(s, func(db *gorm.DB) error {
+		return db.Table(s.TableName()).CreateInBatches(resources, len(resources)).Error
+	})
 
 	service.Append(c.rdb)
 	logx.Sys.Info("完成数据库配置")

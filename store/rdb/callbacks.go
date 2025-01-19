@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2024-10-05 00:20:28
+ * @LastEditTime: 2025-01-19 23:40:00
  * @Description: 回掉函数
  */
 package rdb
@@ -39,7 +39,6 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	)
 	sub := store.buildSubQuery(tx)
 	store.dataPermissonCallback(tx, sub)
-
 	// 分区表不存在不再直接查询,TODO: 增加锁
 	table := tx.Statement.Table
 	if !store.shardingAllTable[table] {
@@ -51,7 +50,6 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 		return
 	}
 	sks = sk.(string)
-
 	// 分区数据库标识
 	skDB, ok := tx.Get(consts.CTX_SHARDING_DB)
 	if ok {
@@ -79,10 +77,14 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 		switch store.shardingModel {
 
 		case SHADING_MODEL_TABLE:
-			// 有分区字段, 但是么有设置分区表
-			if store.shardingTable[table] != nil {
+			// 有分区字段, 但是没有设置分区表
+			if store.shardingAllTable[table] {
 				tx.Statement.Table = fmt.Sprintf("%s_%s", table, sk)
 				tx.Table(tx.Statement.Table)
+				if sub != nil {
+					sub.Statement.Table = fmt.Sprintf("%s_%s", table, sk)
+					sub.Table(sub.Statement.Table)
+				}
 
 			}
 		case SHADING_MODEL_DB:

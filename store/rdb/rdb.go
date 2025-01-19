@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2024-10-05 10:33:16
+ * @LastEditTime: 2025-01-19 23:09:23
  * @Description: 关系数据库配置
  */
 package rdb
@@ -52,20 +52,21 @@ const (
 )
 
 type rdbStore struct {
-	db                  *gorm.DB
-	dsn                 *dsn.Dsn
-	dial                gorm.Dialector
-	dbPool              map[string]*gorm.DB
-	statTab             Tabler
-	tablers             map[string]Tabler
-	isRunning           bool
-	migrateList         []func() error
-	shardingTable       map[string][]string // 仅仅写入注册了分区表的表
-	shardingModel       int8
-	shardingSuffixs     []string               //分区后缀
-	shardingAllTable    map[string]bool        // 模型注册时, 只要包含了分区字段的表, 都会写入到该map中, 用于回调函数判断是否增加分区字段
-	dataPermissionTable map[string]bool        // 模型注册时, 只要包含了权限字段的表, 都会写入到该map中, 用于回调函数判断是否增加分区字段
-	entityInfo          map[string]*EntityInfo // 实体信息, 包含是否有分区, 是否是分区表, 是否有权限设置, 实体数据缓存时间等
+	db                       *gorm.DB
+	dsn                      *dsn.Dsn
+	dial                     gorm.Dialector
+	dbPool                   map[string]*gorm.DB
+	statTab                  Tabler
+	tablers                  map[string]Tabler
+	isRunning                bool
+	migrateList              []RegisterFunc
+	shardingTable            map[string][]string // 仅仅写入注册了分区表的表
+	shardingModel            int8
+	shardingSuffixs          []string               //分区后缀
+	shardingAllTable         map[string]bool        // 模型注册时, 只要包含了分区字段的表, 都会写入到该map中, 用于回调函数判断是否增加分区字段
+	dataPermissionTable      map[string]bool        // 模型注册时, 只要包含了权限字段的表, 都会写入到该map中, 用于回调函数判断是否增加分区字段
+	entityInfo               map[string]*EntityInfo // 实体信息, 包含是否有分区, 是否是分区表, 是否有权限设置, 实体数据缓存时间等
+	shardingTableMigrateList map[string][]RegisterFunc
 }
 
 type Store interface {
@@ -114,7 +115,7 @@ type Store interface {
 	AddShardingTable(table string)
 
 	// 添加启动前的前置执行程序
-	AddMigrateList(fs ...func() error)
+	AddMigrateList(fs ...RegisterFunc)
 
 	// 添加分区后缀, 同时会重置表分区,自动迁移新增表分区的结构
 	AddShardingSuffixs(suffixs string) (err error)
@@ -141,15 +142,16 @@ type Store interface {
 var _ Store = (*rdbStore)(nil)
 
 var rdb = &rdbStore{
-	db:                  &gorm.DB{},
-	dbPool:              map[string]*gorm.DB{},
-	tablers:             make(map[string]Tabler, 1000),
-	migrateList:         make([]func() error, 0, 100),
-	shardingTable:       make(map[string][]string, 100),
-	shardingSuffixs:     make([]string, 0, 100),
-	shardingAllTable:    make(map[string]bool, 100),
-	dataPermissionTable: make(map[string]bool, 100),
-	entityInfo:          make(map[string]*EntityInfo, 100),
+	db:                       &gorm.DB{},
+	dbPool:                   map[string]*gorm.DB{},
+	tablers:                  make(map[string]Tabler, 1000),
+	migrateList:              make([]RegisterFunc, 0, 100),
+	shardingTable:            make(map[string][]string, 100),
+	shardingSuffixs:          make([]string, 0, 100),
+	shardingAllTable:         make(map[string]bool, 100),
+	dataPermissionTable:      make(map[string]bool, 100),
+	entityInfo:               make(map[string]*EntityInfo, 100),
+	shardingTableMigrateList: make(map[string][]RegisterFunc, 100),
 }
 
 func New() (s Store) {
@@ -232,43 +234,52 @@ func (store *rdbStore) SetConfig(optfs ...dsn.DsnFunc) (err error) {
 // 在表创建后, 可以执行一些自定义的方法, 主要用于初始化数据写入
 func (store *rdbStore) Register(t Tabler, fs ...RegisterFunc) Store {
 	store.tablers[t.TableName()] = t
+	store.GenEntityInfo(t.TableName())
 
-	store.migrateList = append(store.migrateList, func() (err error) {
+	store.migrateList = append(store.migrateList, func(db *gorm.DB) error {
 		// 根据实际使用, 系统资源表将在最后被加载
 		store.statTab = t
-		err = store.AutoShardingTable(t.TableName(), "")
+		err := store.AutoShardingTable(t.TableName(), "")
+		// entity := store.GetEntityInfo(t.TableName())
+
 		if err != nil {
-			return
+			return err
 		}
+
 		// 从命令行重置所有表或部分表
 		if strings.Contains(env.Active().DBInit(), t.TableName()) ||
 			env.Active().DBInit() == TABLE_INIT_ALL {
-			if store.db.Migrator().HasTable(t) {
-				err = store.db.Migrator().DropTable(t)
+			if db.Migrator().HasTable(t) {
+				err = db.Migrator().DropTable(t)
 				if err != nil {
-					return
+					return err
 				}
-			}
-		}
-		isHasTable := false
-		if store.db.Migrator().HasTable(t) {
-			isHasTable = true
-		}
-		err = store.db.AutoMigrate(t)
-		if err != nil {
-			return
-		}
-		if !isHasTable {
-			for _, f := range fs {
-				err = f()
-				if err != nil {
-					return
-				}
-			}
-		}
-		return
 
+				store.entityInfo[t.TableName()].IsMigrator = true
+			}
+		}
+
+		err = db.AutoMigrate(t)
+		if err != nil {
+			return err
+		}
+		if store.entityInfo[t.TableName()].IsMigrator {
+			for _, f := range fs {
+				err = f(db)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		return err
 	})
+	if !store.entityInfo[t.TableName()].IsSharding {
+		return store
+	}
+	if store.shardingTableMigrateList[t.TableName()] == nil {
+		store.shardingTableMigrateList[t.TableName()] = make([]RegisterFunc, 0, 10)
+	}
+	store.shardingTableMigrateList[t.TableName()] = append(store.shardingTableMigrateList[t.TableName()], fs...)
 	return store
 }
 
@@ -278,9 +289,15 @@ func (store *rdbStore) autoMigrate() (err error) {
 
 	// 初始化注册信息
 	for _, fs := range store.migrateList {
-		e := fs()
+		e := fs(store.db)
 		if e != nil {
 			err = errorx.Wrap(e, "表迁移操作失败")
+		}
+	}
+	for table := range store.shardingAllTable {
+		err = store.AutoShardingTableMigrate(table, "")
+		if err != nil {
+			return
 		}
 	}
 	return
@@ -321,7 +338,7 @@ func (store *rdbStore) CreateInBatches(ts interface{}) (err error) {
 	return
 }
 
-type RegisterFunc func() error
+type RegisterFunc func(*gorm.DB) error
 
 type TransactionFunc func(tx *gorm.DB) (err error)
 
@@ -430,5 +447,72 @@ func (store *rdbStore) GetShardingSuffixs() (result []string) {
 	tx = tx.Table(TABLE_SYSTEM_CORE_SHARDING).Select("suffix")
 	tx.Find(&result)
 	store.shardingSuffixs = result
+	return
+}
+
+// 生成实体表信息
+//
+// 通过反射, 获取实体是否时分区表和是否有数据权限
+func (store *rdbStore) GenEntityInfo(tableName string) (entityInfo *EntityInfo, err error) {
+	tabler := store.tablers[tableName]
+	if tabler == nil {
+		return nil, errorx.Errorf("无法获取表名为:%s的表结构:", tableName)
+	}
+
+	entityInfo = &EntityInfo{}
+	// 通过反射获取模型中是否包含分区字段用于创建分区
+	rt := reflect.TypeOf(tabler).Elem()
+	rtModel, ok1 := rt.FieldByName("ShardingModel")
+	rtKey, ok2 := rt.FieldByName("ShadingKey")
+
+	// 通过多重判断, 确定模型中包含了分区字段
+	if ok1 && ok2 &&
+		rtKey.Name == "ShadingKey" &&
+		rtModel.Name == "ShardingModel" &&
+		strings.Contains(rtKey.Tag.Get("gorm"), "column:sk") {
+
+		store.shardingAllTable[tabler.TableName()] = true
+		entityInfo.IsSharding = true
+		entityInfo.ShardingModel = store.shardingModel
+	}
+
+	// 增加数据权限字段的判断
+	rtModel, ok1 = rt.FieldByName("DataPermissionStringModel")
+	rtKey, ok2 = rt.FieldByName("DataPermission")
+	if ok1 && ok2 &&
+		rtKey.Name == "DataPermission" &&
+		rtModel.Name == "DataPermissionStringModel" &&
+		strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
+
+		store.dataPermissionTable[tabler.TableName()] = true
+		store.dataPermissionTable["DataPermissionStringModel"] = true
+		entityInfo.IsDataPermission = true
+		entityInfo.DataPermissionType = "string"
+	} else {
+		// 增加数据权限字段的判断
+		rtModel, ok1 = rt.FieldByName("DataPermissionIntModel")
+		rtKey, ok2 = rt.FieldByName("DataPermission")
+		if ok1 && ok2 &&
+			rtKey.Name == "DataPermission" &&
+			rtModel.Name == "DataPermissionIntModel" &&
+			strings.Contains(rtKey.Tag.Get("gorm"), "column:dp") {
+
+			store.dataPermissionTable[tabler.TableName()] = true
+			store.dataPermissionTable["DataPermissionIntModel"] = true
+
+			entityInfo.IsDataPermission = true
+			entityInfo.DataPermissionType = "int"
+		}
+
+	}
+
+	// 如果只有分区, 没有数据权限的表, 默认缓存不过期
+	entityInfo.CacheTTL = -1
+
+	// 如果有数据权限的表, 缓存1小时
+	if entityInfo.IsDataPermission {
+		entityInfo.CacheTTL = 3600
+	}
+	store.entityInfo[tableName] = entityInfo
 	return
 }

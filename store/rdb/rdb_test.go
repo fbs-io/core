@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-20 07:03:06
  * @LastEditors: reel
- * @LastEditTime: 2024-07-07 20:47:56
+ * @LastEditTime: 2025-01-19 20:07:11
  * @Description: 测试通过条件结构体自动完成查询条件的设置
  */
 package rdb
@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"gorm.io/gorm"
 )
 
 type OrgBase struct {
@@ -45,7 +47,7 @@ func TestConfig(t *testing.T) {
 
 	// 测试表注册功能
 	rdb.Register(&OrgBase{},
-		func() error { return rdb.CreateInBatches(data) },
+		func(*gorm.DB) error { return rdb.CreateInBatches(data) },
 	)
 	// DB状态显示测试
 	fmt.Println("DB Status: ", rdb.Status())

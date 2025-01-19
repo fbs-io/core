@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2024-08-14 07:24:57
  * @LastEditors: reel
- * @LastEditTime: 2024-10-05 00:01:14
+ * @LastEditTime: 2025-01-19 22:54:28
  * @Description: 管理表结构
  */
 package rdb
@@ -19,6 +19,7 @@ type EntityInfo struct {
 	TableComment       string        // 表描述
 	IsSharding         bool          // 是否是分区
 	ShardingModel      int8          // 分区模式, 表分区, 库分区等
+	IsMigrator         bool          // 记录本次启动表是否有重置, 用于初始数据写入判断
 	IsDataPermission   bool          // 是否有数据权限
 	DataPermissionType string        // 数据权限字段是数字类型还是字符串类型
 	IsPartition        bool          // 是否是分区表, 同一张表中, 按业务字段进行分区, 一般时业务日期
