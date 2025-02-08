@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2025-01-19 23:40:00
+ * @LastEditTime: 2025-02-08 18:20:14
  * @Description: 回掉函数
  */
 package rdb
@@ -30,7 +30,11 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	if tx.Statement == nil {
 		return
 	}
-	if tx.Statement.Schema == nil {
+	table := tx.Statement.Table
+	if table == "e_sys_core_resources" {
+		return
+	}
+	if table == "" {
 		return
 	}
 	var (
@@ -40,16 +44,16 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 	sub := store.buildSubQuery(tx)
 	store.dataPermissonCallback(tx, sub)
 	// 分区表不存在不再直接查询,TODO: 增加锁
-	table := tx.Statement.Table
+	// table := tx.Statement.Table
+
 	if !store.shardingAllTable[table] {
 		return
 	}
 	// 分区字段不存在,不再处理
 	sk, ok := tx.Get(consts.CTX_SHARDING_KEY)
-	if !ok || sk.(string) == "" {
-		return
+	if ok {
+		sks = sk.(string)
 	}
-	sks = sk.(string)
 	// 分区数据库标识
 	skDB, ok := tx.Get(consts.CTX_SHARDING_DB)
 	if ok {
@@ -60,17 +64,17 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 		switch tx.Statement.BuildClauses[0] {
 		case "SELECT":
 			if sub != nil {
-				sub.Where("sk = ?", sk)
+				sub.Where("sk = ?", sks)
 			} else {
-				tx.Where("sk = ?", sk)
+				tx.Where("sk = ?", sks)
 			}
 		case "UPDATE":
 			store.setUpdatesCallback(tx)
-			tx.Statement.SetColumn("sk", sk, true)
-			tx.Where("sk = ? ", sk)
+			tx.Statement.SetColumn("sk", sks, true)
+			tx.Where("sk = ? ", sks)
 		case "INSERT":
 			store.setCreatesCallback(tx)
-			tx.Statement.SetColumn("sk", sk, true)
+			tx.Statement.SetColumn("sk", sks, true)
 
 		}
 
@@ -79,10 +83,10 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 		case SHADING_MODEL_TABLE:
 			// 有分区字段, 但是没有设置分区表
 			if store.shardingAllTable[table] {
-				tx.Statement.Table = fmt.Sprintf("%s_%s", table, sk)
+				tx.Statement.Table = fmt.Sprintf("%s_%s", table, sks)
 				tx.Table(tx.Statement.Table)
 				if sub != nil {
-					sub.Statement.Table = fmt.Sprintf("%s_%s", table, sk)
+					sub.Statement.Table = fmt.Sprintf("%s_%s", table, sks)
 					sub.Table(sub.Statement.Table)
 				}
 
@@ -139,7 +143,7 @@ func (store *rdbStore) dataPermissonCallback(tx *gorm.DB, subTx *gorm.DB) *gorm.
 	if tx.Statement == nil {
 		return tx
 	}
-	if tx.Statement.Schema == nil {
+	if tx.Statement.Table == "" {
 		return tx
 	}
 	table := tx.Statement.Table
