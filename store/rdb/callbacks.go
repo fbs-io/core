@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-10-15 07:48:02
  * @LastEditors: reel
- * @LastEditTime: 2025-02-08 18:20:14
+ * @LastEditTime: 2025-02-09 15:09:38
  * @Description: 回掉函数
  */
 package rdb
@@ -31,12 +31,15 @@ func (store *rdbStore) switchSharding(tx *gorm.DB) {
 		return
 	}
 	table := tx.Statement.Table
-	if table == "e_sys_core_resources" {
-		return
-	}
+
 	if table == "" {
 		return
 	}
+
+	if tx.Statement.Dest == nil && tx.Statement.Schema == nil {
+		return
+	}
+
 	var (
 		sks   string
 		skDBs string
@@ -146,6 +149,11 @@ func (store *rdbStore) dataPermissonCallback(tx *gorm.DB, subTx *gorm.DB) *gorm.
 	if tx.Statement.Table == "" {
 		return tx
 	}
+
+	if tx.Statement.Dest == nil && tx.Statement.Schema == nil {
+		return tx
+	}
+
 	table := tx.Statement.Table
 	if !store.dataPermissionTable[table] {
 		return tx
