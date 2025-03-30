@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -53,16 +54,16 @@ type IRoutes interface {
 	// Any(string, ...HandlerFunc)
 	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
 	//参数为如果为空, 该方法不会在 api 文档中进行注册
-	GET(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (resource *Resources)
+	GET(relativePath, pathName string, params any, handlers ...HandlerFunc) (resource *Resources)
 	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
 	//参数为如果为空, 该方法不会在 api 文档中进行注册
-	PUT(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (resource *Resources)
+	PUT(relativePath, pathName string, params any, handlers ...HandlerFunc) (resource *Resources)
 	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
 	//参数为如果为空, 该方法不会在 api 文档中进行注册
-	POST(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (resource *Resources)
+	POST(relativePath, pathName string, params any, handlers ...HandlerFunc) (resource *Resources)
 	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
 	//参数为如果为空, 该方法不会在 api 文档中进行注册
-	DELETE(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (resource *Resources)
+	DELETE(relativePath, pathName string, params any, handlers ...HandlerFunc) (resource *Resources)
 	// TODO: 以后根据业务进行扩展
 	// PATCH(string, ...HandlerFunc)
 	// OPTIONS(string, ...HandlerFunc)
@@ -72,7 +73,7 @@ type IRoutes interface {
 type router struct {
 	group    *gin.RouterGroup
 	resource *Resources
-	core     Core
+	core     *core
 }
 
 var (
@@ -146,7 +147,7 @@ func (r *router) Group(relativePath, pathName string, handlers ...HandlerFunc) R
 // Get请求方式封装
 //
 // 参数如果为空, 该方法不会被记录在资源表中
-func (r *router) GET(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Resources) {
+func (r *router) GET(relativePath, pathName string, params any, handlers ...HandlerFunc) (source *Resources) {
 	// handlers = append([]HandlerFunc{r.validParams()}, handlers...)
 	r.group.GET(relativePath, wrapHandlers(r.core, handlers...)...)
 	return r.operation("GET", relativePath, pathName, params)
@@ -155,7 +156,7 @@ func (r *router) GET(relativePath, pathName string, params interface{}, handlers
 // Post请求方式封装
 //
 // 参数如果为空, 该方法不会被记录在资源表中
-func (r *router) POST(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Resources) {
+func (r *router) POST(relativePath, pathName string, params any, handlers ...HandlerFunc) (source *Resources) {
 	r.group.POST(relativePath, wrapHandlers(r.core, handlers...)...)
 	return r.operation("POST", relativePath, pathName, params)
 }
@@ -163,7 +164,7 @@ func (r *router) POST(relativePath, pathName string, params interface{}, handler
 // Delete请求方式封装
 //
 // 参数如果为空, 该方法不会被记录在资源表中
-func (r *router) DELETE(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Resources) {
+func (r *router) DELETE(relativePath, pathName string, params any, handlers ...HandlerFunc) (source *Resources) {
 	r.group.DELETE(relativePath, wrapHandlers(r.core, handlers...)...)
 	return r.operation("DELETE", relativePath, pathName, params)
 }
@@ -171,7 +172,7 @@ func (r *router) DELETE(relativePath, pathName string, params interface{}, handl
 // Put请求方式封装
 //
 // 参数如果为空, 该方法不会被记录在资源表中
-func (r *router) PUT(relativePath, pathName string, params interface{}, handlers ...HandlerFunc) (source *Resources) {
+func (r *router) PUT(relativePath, pathName string, params any, handlers ...HandlerFunc) (source *Resources) {
 	r.group.PUT(relativePath, wrapHandlers(r.core, handlers...)...)
 	return r.operation("PUT", relativePath, pathName, params)
 }
@@ -189,7 +190,7 @@ func (r *router) HEAD(relativePath string, handlers ...HandlerFunc) {
 }
 
 // 处理参数生成逻辑
-func (r *router) operation(method, relativePath, pathName string, params interface{}) (source *Resources) {
+func (r *router) operation(method, relativePath, pathName string, params any) (source *Resources) {
 	if relativePath == "" {
 		relativePath = "/"
 	}
@@ -221,7 +222,7 @@ func (r *router) genResources(relativePath, name, method string) *Resources {
 	basePaths := strings.Split(r.group.BasePath(), "/")[1:]
 	method = strings.ToLower(method)
 	s := &Resources{}
-	// s.Meta = make(map[string]interface{}, 10)
+	// s.Meta = make(map[string]any, 10)
 	fullpath := basePaths
 	var metaType = "menu"
 	if method != "" {
@@ -250,7 +251,7 @@ func (r *router) genResources(relativePath, name, method string) *Resources {
 
 		}
 	}
-	s.Meta = map[string]interface{}{
+	s.Meta = map[string]any{
 		"title": name,
 		"icon":  "el-icon-menu",
 		"type":  metaType,
@@ -269,6 +270,8 @@ const (
 	tagDesc    = "desc"
 	tagBinding = "binding"
 	tagDefault = "default"
+	tagGorm    = "gorm"
+	tagView    = "views"
 
 	// 参数相关
 	paramsKey        = "key"
@@ -293,10 +296,10 @@ func genResourcesParams(rt reflect.Type) (params string, contentType string) {
 	if rt == nil {
 		return
 	}
-	data := make([]interface{}, 0)
+	data := make([]any, 0)
 
 	for i := 0; i < rt.NumField(); i++ {
-		item := make(map[string]interface{}, 4)
+		item := make(map[string]any, 4)
 		field := rt.Field(i)
 
 		// 获取前端参数名称
@@ -335,7 +338,27 @@ func genResourcesParams(rt reflect.Type) (params string, contentType string) {
 		item[tagDesc] = field.Tag.Get(tagDesc)
 		// 用于校验参数信息
 		item[tagBinding] = field.Tag.Get(tagBinding)
+		views := map[string]any{}
+		for _, val := range strings.Split(field.Tag.Get(tagView), ";") {
+			kvs := strings.Split(val, "=")
+			k := kvs[0]
+			if len(k) == 0 {
+				continue
+			}
+			var v any
+			switch kvs[0] {
+			case "select":
+				v = key
+			case "multiple":
+				v = true
+			}
 
+			if len(kvs) > 1 {
+				v = kvs[1]
+			}
+			views[k] = v
+		}
+		item[tagView] = views
 		data = append(data, item)
 		paramsB, _ := json.Marshal(data)
 		params = string(paramsB)
@@ -379,6 +402,22 @@ func (r *router) WithRouter(t int8) RouterGroup {
 	return r
 }
 
+// 设置为前端组件路径
+//
+// 组件默认路径和后端路径一样, 通过该方法可以设置自定义前端组件路径
+//
+// 例如: /ajax/user/list => /user/list
+func (r *router) WithComponent(component string) RouterGroup {
+	r.resource.Component = component
+	return r
+}
+
+// 获取前端组件路径
+func (r *router) Component() string {
+	return r.resource.Component
+
+}
+
 // 用于设置路由和资源的关系
 type RouterResource interface {
 
@@ -408,7 +447,20 @@ type RouterResource interface {
 	WithHidden() RouterGroup
 
 	// 设置前端Meta信息
-	WithMeta(key string, value interface{}) RouterGroup
+	WithMeta(key string, value any) RouterGroup
+
+	// 设置为前端组件路径
+	//
+	// 组件默认路径和后端路径一样, 通过该方法可以设置自定义前端组件路径, 可以充分复用前端组件
+	//
+	// 例如: /ajax/user/list => /user/list
+	WithComponent(component string) RouterGroup
+
+	// 获取前端组件路径
+	Component() string
+
+	// 自定义前端组件字段展示
+	WithViews(item any, fs ...FuncSetViews) RouterGroup
 }
 
 // 设置路由隐藏
@@ -423,7 +475,7 @@ func (r *router) Core() Core {
 }
 
 // 设置前端Meta信息
-func (r *router) WithMeta(key string, value interface{}) RouterGroup {
+func (r *router) WithMeta(key string, value any) RouterGroup {
 	r.resource.Meta[key] = value
 	return r
 }
@@ -431,4 +483,214 @@ func (r *router) WithMeta(key string, value interface{}) RouterGroup {
 func (r *router) Use(middleware ...gin.HandlerFunc) RouterGroup {
 	r.group.Use(middleware...)
 	return r
+}
+
+// 设置接口的返回字段
+//
+// 仅支持struct	WithViews( struct ), 字段设置参数仅用于批量设置
+//
+// 标签支持 字段: json, key, 描述: gorm, desc,
+func (r *router) WithViews(item any, fs ...FuncSetViews) RouterGroup {
+	rt := reflect.TypeOf(item)
+	for i := 0; i < rt.NumField(); i++ {
+
+		view := &Views{
+			ResourceCode: r.resource.Code,
+			ViewCode:     r.resource.Name,
+		}
+		options := &SetViewOptions{
+			ColumnWidth:    120,
+			ColumnHeight:   0,
+			ColumnIsHidden: -1,
+			ColumnIsOrder:  1,
+			ColumnFilter:   "Y",
+			ColumnFixed:    "N",
+			Account:        "system",
+		}
+		for _, f := range fs {
+			f(options)
+		}
+		field := rt.Field(i)
+
+		// 获取前端参数名称
+		view.ColumnCode = field.Tag.Get(tagJson)
+		// TODO: 增加其他类型检查
+
+		view.ColumnName = field.Tag.Get(tagDesc)
+		if view.ColumnName == "" {
+			for _, tag := range strings.Split(field.Tag.Get(tagGorm), ";") {
+				if strings.Contains(tag, "comment:") {
+					view.ColumnName = strings.Split(tag, ":")[1]
+					break
+				}
+			}
+		}
+
+		for _, tag := range strings.Split(field.Tag.Get(tagView), ";") {
+			if strings.Contains(tag, "code:") {
+				view.ColumnCode = strings.Split(tag, ":")[1]
+			}
+			if strings.Contains(tag, "name:") {
+				view.ColumnName = strings.Split(tag, ":")[1]
+			}
+			if strings.Contains(tag, "width:") {
+				i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
+				if i > 0 {
+					view.ColumnWidth = int16(i)
+				}
+			}
+			if strings.Contains(tag, "height:") {
+				i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
+				if i > 0 {
+					view.ColumnHeight = int16(i)
+				}
+			}
+			if strings.Contains(tag, "ishidden:") {
+				switch strings.Split(tag, ":")[1] {
+				case "true":
+					view.ColumnHidden = 1
+				case "false":
+					view.ColumnHidden = -1
+				default:
+					view.ColumnHidden = -1
+				}
+			}
+			if strings.Contains(tag, "isorder:") {
+				switch strings.Split(tag, ":")[1] {
+				case "true":
+					view.ColumnIsOrder = 1
+				case "false":
+					view.ColumnIsOrder = -1
+				default:
+					view.ColumnIsOrder = 1
+				}
+			}
+			if strings.Contains(tag, "filter:") {
+				view.ColumnFilter = strings.Split(tag, ":")[1]
+			}
+			if strings.Contains(tag, "fixed:") {
+				view.ColumnFixed = strings.Split(tag, ":")[1]
+			}
+			if strings.Contains(tag, "formatter_type:") {
+				view.ColumnFormatterType = strings.Split(tag, ":")[1]
+			}
+			if strings.Contains(tag, "formatter") {
+				view.ColumnFormatterType = "text"
+				kvs := strings.Split(tag, ":")
+				k := kvs[0]
+				if len(k) == 0 {
+					continue
+				}
+				var v = view.ColumnCode
+
+				if len(kvs) > 1 {
+					v = kvs[1]
+				}
+				view.ColumnFormatter = v
+			}
+
+		}
+		if view.ColumnCode == "" {
+			continue
+		}
+		key := view.ResourceCode + ":" + view.ColumnCode
+		if r.core.ViewsMap[key] == nil {
+			r.core.Views = append(r.core.Views, view)
+			r.core.ViewsMap[key] = view
+		}
+		view.ViewCode = options.ViewCode
+		view.ColumnWidth = options.ColumnWidth
+		view.ColumnHeight = options.ColumnHeight
+		view.ColumnHidden = options.ColumnIsHidden
+		view.ColumnIsOrder = options.ColumnIsOrder
+		view.ColumnFilter = options.ColumnFilter
+		view.ColumnFixed = options.ColumnFixed
+		view.Account = options.Account
+
+	}
+
+	return r
+}
+
+func (r *router) SetViews(view *Views) RouterGroup {
+	key := view.ResourceCode + ":" + view.ColumnCode
+
+	r.core.ViewsMap[key].ColumnCode = view.ColumnCode
+	r.core.ViewsMap[key].ColumnName = view.ColumnName
+	r.core.ViewsMap[key].ColumnWidth = view.ColumnWidth
+	r.core.ViewsMap[key].ColumnHeight = view.ColumnHeight
+	r.core.ViewsMap[key].ColumnHidden = view.ColumnHidden
+	r.core.ViewsMap[key].ColumnIsOrder = view.ColumnIsOrder
+	r.core.ViewsMap[key].ColumnFilter = view.ColumnFilter
+	r.core.ViewsMap[key].ColumnFixed = view.ColumnFixed
+	r.core.ViewsMap[key].Account = view.Account
+
+	return r
+}
+
+func (r *router) GetViews(ColumnCode string) *Views {
+	key := r.resource.Code + ":" + ColumnCode
+	return r.core.ViewsMap[key]
+}
+
+type SetViewOptions struct {
+	ViewCode       string
+	ColumnWidth    int16
+	ColumnHeight   int16
+	ColumnIsHidden int8
+	ColumnIsOrder  int8
+	ColumnFilter   string
+	ColumnFixed    string
+	Account        string
+}
+
+type FuncSetViews func(*SetViewOptions)
+
+// 设置视图名称
+func SetViewCode(viewCode string) FuncSetViews {
+	return func(svo *SetViewOptions) {
+		svo.ViewCode = viewCode
+	}
+}
+
+// 设置字段宽度
+func SetColumnWidth(columnWidth int16) FuncSetViews {
+	return func(svo *SetViewOptions) {
+		svo.ColumnWidth = columnWidth
+	}
+}
+
+// 设置字段高度
+func SetColumnHeight(columnHeight int16) FuncSetViews {
+	return func(svo *SetViewOptions) {
+		svo.ColumnHeight = columnHeight
+	}
+}
+
+// 设置字段是否隐藏
+func SetColumnIsHidden(columnIsHidden int8) FuncSetViews {
+	return func(svo *SetViewOptions) {
+		svo.ColumnIsHidden = columnIsHidden
+	}
+}
+
+// 设置字段是否排序
+func SetColumnIsOrder(columnIsOrder int8) FuncSetViews {
+	return func(svo *SetViewOptions) {
+		svo.ColumnIsOrder = columnIsOrder
+	}
+}
+
+// 设置字段是否过滤
+func SetColumnFilter(columnFilter string) FuncSetViews {
+	return func(svo *SetViewOptions) {
+		svo.ColumnFilter = columnFilter
+	}
+}
+
+// 设置字段固定, left, right, none
+func SetColumnFixed(columnFixed string) FuncSetViews {
+	return func(svo *SetViewOptions) {
+		svo.ColumnFixed = columnFixed
+	}
 }

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2024-12-28 22:38:55
+ * @LastEditTime: 2025-03-29 15:24:16
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -44,6 +44,8 @@ const (
 	TABLE_SYSTEM_CORE_RESOURCE = "e_sys_core_resources"
 	// 操作日志表
 	TABLE_SYSTEM_CORE_OPERATELOG = "e_sys_core_operatelog"
+	// 前端视图字段表
+	TABLE_SYSTEM_CORE_VIEWS = "e_sys_core_views"
 )
 
 // 系统资源表
@@ -52,7 +54,7 @@ const (
 //
 // 当使用core中的路由接口生成路由时, 系统资源会自动注册到这张表中
 type ResourcesBase struct {
-	Code  string `json:"code" gorm:"column:resource_code;comment:资源代码;uniqueIndex"`           // 资源code
+	Code  string `json:"code" gorm:"column:resource_code;comment:资源代码;index"`                 // 资源code
 	Name  string `json:"name" gorm:"column:resource_name;comment:资源名称;index"`                 // 资源名称,
 	Desc  string `json:"desc" gorm:"column:resource_desc;comment:资源说明"`                       // 资源描述,可用作title
 	PCode string `json:"pcode" gorm:"column:resource_pcode;comment:上层资源code;index"`           // 父级code
@@ -77,6 +79,7 @@ type ResourcesBase struct {
 type Resources struct {
 	ResourcesBase
 	rdb.Model
+	rdb.ShardingModel
 	Children []*Resources `json:"children" gorm:"-"`
 }
 
@@ -194,4 +197,33 @@ type OperateLog struct {
 
 func (o *OperateLog) TableName() string {
 	return TABLE_SYSTEM_CORE_OPERATELOG
+}
+
+// 用于前端展示的视图
+type Views struct {
+	ResourceCode        string `json:"resource_code" gorm:"column:resource_code;comment:资源code;index"`
+	ViewCode            string `json:"view_code" gorm:"column:view_code;comment:视图code;index"`
+	ColumnCode          string `json:"column_code" gorm:"column:column_code;comment:视图code;index"`
+	ColumnName          string `json:"column_name" gorm:"column:column_name;comment:视图名称"`
+	ColumnWidth         int16  `json:"column_width" gorm:"column:column_width;comment:宽度"`
+	ColumnHeight        int16  `json:"column_height" gorm:"column:column_height;comment:高度"`
+	ColumnHidden        int8   `json:"column_hidden" gorm:"column:column_hidden;comment:是否隐藏"`
+	ColumnIsOrder       int8   `json:"column_order" gorm:"column:column_isorder;comment:是否排序"`
+	ColumnFilter        string `json:"column_filter" gorm:"column:column_filter;comment:过滤字段"`
+	ColumnFixed         string `json:"column_fixed" gorm:"column:column_fixed;comment:固定列"`
+	ColumnFormatterType string `json:"column_formatter_type" gorm:"column:column_formatter_type;comment:格式化类型"`
+	ColumnFormatter     string `json:"column_formatter" gorm:"column:column_formatter;comment:格式化"`
+	FormSpan            string `json:"span" gorm:"column:form_span;comment:表单宽度"`
+	FormComponent       string `json:"component" gorm:"column:form_component;comment:表单组件类型"`
+	Account             string `json:"account" gorm:"column:account;comment:账号"`
+	rdb.Model
+	rdb.ShardingModel
+}
+
+func (o *Views) TableName() string {
+	return TABLE_SYSTEM_CORE_VIEWS
+}
+
+func (e *Views) ColumnNameWithCode() string {
+	return "resource_code"
 }

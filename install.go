@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2025-01-19 20:06:37
+ * @LastEditTime: 2025-03-17 23:47:53
  * @Description: 系统配置相关操作
  */
 package core
@@ -79,10 +79,20 @@ func (c *core) install() (err error) {
 	// 把资源map转成list, 初始化写入资源列表
 	c.rdb.Register(&OperateLog{})
 	c.rdb.Register(&rdb.Sharding{})
+	v := &Views{}
+	c.rdb.Register(v, func(db *gorm.DB) error {
+		viewByte, _ := json.Marshal(c.Views)
+		views := make([]*Views, 0, 1000)
+		json.Unmarshal(viewByte, &views)
+		return db.Table(v.TableName()).CreateInBatches(views, len(views)).Error
+	})
 
 	s := &Resources{}
 	c.rdb.Register(s, func(db *gorm.DB) error {
-		return db.Table(s.TableName()).CreateInBatches(resources, len(resources)).Error
+		resourceByte, _ := json.Marshal(resources)
+		res := make([]*Resources, 0, 1000)
+		json.Unmarshal(resourceByte, &res)
+		return db.Table(s.TableName()).CreateInBatches(res, len(resources)).Error
 	})
 
 	service.Append(c.rdb)

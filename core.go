@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 23:25:29
  * @LastEditors: reel
- * @LastEditTime: 2024-10-06 23:02:06
+ * @LastEditTime: 2025-03-17 20:54:16
  * @Description: 管理核心组件的启动和运行
  */
 package core
@@ -28,14 +28,16 @@ import (
 )
 
 type core struct {
-	config  *config.Config
-	msc     mux.Mux // 用于管理整个服务
-	ams     mux.Mux // 用于应用管理
-	cron    cron.Cron
-	cache   cache.Store
-	rdb     rdb.Store
-	session session.Session
-	limiter *rate.Limiter
+	config   *config.Config
+	msc      mux.Mux // 用于管理整个服务
+	ams      mux.Mux // 用于应用管理
+	cron     cron.Cron
+	cache    cache.Store
+	rdb      rdb.Store
+	session  session.Session
+	limiter  *rate.Limiter
+	Views    []*Views
+	ViewsMap map[string]*Views
 }
 
 var _ Core = (*core)(nil)
@@ -119,13 +121,15 @@ func New(funcs ...FuncCores) (Core, error) {
 	db.SetShardingModel(opt.shardingModel)
 
 	c := &core{
-		msc:     dms,
-		ams:     ams,
-		rdb:     db,
-		cron:    cron.New(),
-		cache:   cache.New(),
-		config:  &config.Config{},
-		limiter: rate.NewLimiter(rate.Limit(opt.limitNumber), opt.limitSize),
+		msc:      dms,
+		ams:      ams,
+		rdb:      db,
+		cron:     cron.New(),
+		cache:    cache.New(),
+		config:   &config.Config{},
+		limiter:  rate.NewLimiter(rate.Limit(opt.limitNumber), opt.limitSize),
+		Views:    make([]*Views, 0, 1000),
+		ViewsMap: make(map[string]*Views, 1000),
 	}
 
 	// session配置
