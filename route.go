@@ -274,13 +274,15 @@ const (
 	tagView    = "views"
 
 	// 参数相关
-	paramsKey        = "key"
-	paramsValue      = "value"
-	paramsValueType  = "value_type"
-	paramsValueInt   = "int"
-	paramsValueNum   = "number"
-	paramsValueBool  = "bool"
-	paramsValueFloat = "float"
+	paramsKey           = "key"
+	paramsValue         = "value"
+	paramsValueType     = "value_type"
+	paramsValueInt      = "int"
+	paramsValueNum      = "number"
+	paramsValueBool     = "bool"
+	paramsValueFloat    = "float"
+	paramsValueDate     = "date"
+	paramsValueDatetiem = "datetime"
 )
 
 // 根据参数结构体生成API参数,
@@ -492,124 +494,156 @@ func (r *router) Use(middleware ...gin.HandlerFunc) RouterGroup {
 // 标签支持 字段: json, key, 描述: gorm, desc,
 func (r *router) WithViews(item any, fs ...FuncSetViews) RouterGroup {
 	rt := reflect.TypeOf(item)
-	for i := 0; i < rt.NumField(); i++ {
+	options := &SetViewOptions{
+		ColumnWidth:    120,
+		ColumnHeight:   0,
+		ColumnIsHidden: -1,
+		ColumnIsOrder:  1,
+		ColumnFilter:   "Y",
+		ColumnFixed:    "N",
+		Account:        "system",
+	}
+	for _, f := range fs {
+		f(options)
+	}
 
-		view := &Views{
-			ResourceCode: r.resource.Code,
-			ViewCode:     r.resource.Name,
-		}
-		options := &SetViewOptions{
-			ColumnWidth:    120,
-			ColumnHeight:   0,
-			ColumnIsHidden: -1,
-			ColumnIsOrder:  1,
-			ColumnFilter:   "Y",
-			ColumnFixed:    "N",
-			Account:        "system",
-		}
-		for _, f := range fs {
-			f(options)
-		}
+	for i := 0; i < rt.NumField(); i++ {
 		field := rt.Field(i)
 
-		// 获取前端参数名称
-		view.ColumnCode = field.Tag.Get(tagJson)
-		// TODO: 增加其他类型检查
-
-		view.ColumnName = field.Tag.Get(tagDesc)
-		if view.ColumnName == "" {
-			for _, tag := range strings.Split(field.Tag.Get(tagGorm), ";") {
-				if strings.Contains(tag, "comment:") {
-					view.ColumnName = strings.Split(tag, ":")[1]
-					break
-				}
-			}
-		}
-
-		for _, tag := range strings.Split(field.Tag.Get(tagView), ";") {
-			if strings.Contains(tag, "code:") {
-				view.ColumnCode = strings.Split(tag, ":")[1]
-			}
-			if strings.Contains(tag, "name:") {
-				view.ColumnName = strings.Split(tag, ":")[1]
-			}
-			if strings.Contains(tag, "width:") {
-				i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
-				if i > 0 {
-					view.ColumnWidth = int16(i)
-				}
-			}
-			if strings.Contains(tag, "height:") {
-				i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
-				if i > 0 {
-					view.ColumnHeight = int16(i)
-				}
-			}
-			if strings.Contains(tag, "ishidden:") {
-				switch strings.Split(tag, ":")[1] {
-				case "true":
-					view.ColumnHidden = 1
-				case "false":
-					view.ColumnHidden = -1
-				default:
-					view.ColumnHidden = -1
-				}
-			}
-			if strings.Contains(tag, "isorder:") {
-				switch strings.Split(tag, ":")[1] {
-				case "true":
-					view.ColumnIsOrder = 1
-				case "false":
-					view.ColumnIsOrder = -1
-				default:
-					view.ColumnIsOrder = 1
-				}
-			}
-			if strings.Contains(tag, "filter:") {
-				view.ColumnFilter = strings.Split(tag, ":")[1]
-			}
-			if strings.Contains(tag, "fixed:") {
-				view.ColumnFixed = strings.Split(tag, ":")[1]
-			}
-			if strings.Contains(tag, "formatter_type:") {
-				view.ColumnFormatterType = strings.Split(tag, ":")[1]
-			}
-			if strings.Contains(tag, "formatter") {
-				view.ColumnFormatterType = "text"
-				kvs := strings.Split(tag, ":")
-				k := kvs[0]
-				if len(k) == 0 {
-					continue
-				}
-				var v = view.ColumnCode
-
-				if len(kvs) > 1 {
-					v = kvs[1]
-				}
-				view.ColumnFormatter = v
-			}
-
-		}
-		if view.ColumnCode == "" {
+		view := r.genViewColumns(field, options)
+		if view == nil {
 			continue
 		}
+
 		key := view.ResourceCode + ":" + view.ColumnCode
 		if r.core.ViewsMap[key] == nil {
 			r.core.Views = append(r.core.Views, view)
 			r.core.ViewsMap[key] = view
 		}
-		view.ViewCode = options.ViewCode
-		view.ColumnWidth = options.ColumnWidth
-		view.ColumnHeight = options.ColumnHeight
-		view.ColumnHidden = options.ColumnIsHidden
-		view.ColumnIsOrder = options.ColumnIsOrder
-		view.ColumnFilter = options.ColumnFilter
-		view.ColumnFixed = options.ColumnFixed
-		view.Account = options.Account
 
 	}
 
 	return r
+}
+
+func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) (view *Views) {
+
+	view = &Views{
+		ResourceCode:    r.resource.Code,
+		ViewCode:        r.resource.Name,
+		ColumnValueType: "string",
+	}
+
+	// 获取前端参数名称
+	view.ColumnCode = field.Tag.Get(tagJson)
+	// TODO: 增加其他类型检查
+
+	// 处理前端参数名称, 从gorm标签或者自定义的desc标签获取
+	view.ColumnName = field.Tag.Get(tagDesc)
+	if view.ColumnName == "" {
+		for _, tag := range strings.Split(field.Tag.Get(tagGorm), ";") {
+			if strings.Contains(tag, "comment:") {
+				view.ColumnName = strings.Split(tag, ":")[1]
+				break
+			}
+		}
+	}
+	typeStr := field.Type.String()
+
+	// 后端参数类型转换为前端的参数类型
+	if strings.Contains(typeStr, paramsValueInt) {
+		view.ColumnValueType = paramsValueNum
+	} else if strings.Contains(typeStr, paramsValueFloat) {
+		view.ColumnValueType = paramsValueNum
+	} else if strings.Contains(typeStr, paramsValueBool) {
+		view.ColumnValueType = paramsValueBool
+	} else if strings.Contains(typeStr, paramsValueBool) {
+		view.ColumnValueType = paramsValueBool
+	}
+	// 对view标签进行处理
+	genViewTag(view, field.Tag.Get(tagView))
+
+	if view.ColumnCode == "" {
+		return nil
+	}
+
+	view.ViewCode = opt.ViewCode
+	view.ColumnWidth = opt.ColumnWidth
+	view.ColumnHeight = opt.ColumnHeight
+	view.ColumnHidden = opt.ColumnIsHidden
+	view.ColumnIsOrder = opt.ColumnIsOrder
+	view.ColumnFilter = opt.ColumnFilter
+	view.ColumnFixed = opt.ColumnFixed
+	view.Account = opt.Account
+	return
+}
+
+// view标签处理
+func genViewTag(view *Views, viewTag string) {
+	for _, tag := range strings.Split(viewTag, ";") {
+		if strings.Contains(tag, "code:") {
+			view.ColumnCode = strings.Split(tag, ":")[1]
+		}
+		if strings.Contains(tag, "name:") {
+			view.ColumnName = strings.Split(tag, ":")[1]
+		}
+		if strings.Contains(tag, "width:") {
+			i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
+			if i > 0 {
+				view.ColumnWidth = int16(i)
+			}
+		}
+		if strings.Contains(tag, "height:") {
+			i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
+			if i > 0 {
+				view.ColumnHeight = int16(i)
+			}
+		}
+		if strings.Contains(tag, "ishidden:") {
+			switch strings.Split(tag, ":")[1] {
+			case "true":
+				view.ColumnHidden = 1
+			case "false":
+				view.ColumnHidden = -1
+			default:
+				view.ColumnHidden = -1
+			}
+		}
+		if strings.Contains(tag, "isorder:") {
+			switch strings.Split(tag, ":")[1] {
+			case "true":
+				view.ColumnIsOrder = 1
+			case "false":
+				view.ColumnIsOrder = -1
+			default:
+				view.ColumnIsOrder = 1
+			}
+		}
+		if strings.Contains(tag, "filter:") {
+			view.ColumnFilter = strings.Split(tag, ":")[1]
+		}
+		if strings.Contains(tag, "fixed:") {
+			view.ColumnFixed = strings.Split(tag, ":")[1]
+		}
+		if strings.Contains(tag, "formatter_type:") {
+			view.ColumnFormatterType = strings.Split(tag, ":")[1]
+		}
+		if strings.Contains(tag, "formatter") {
+			view.ColumnFormatterType = "text"
+			kvs := strings.Split(tag, ":")
+			k := kvs[0]
+			if len(k) == 0 {
+				continue
+			}
+			var v = view.ColumnCode
+
+			if len(kvs) > 1 {
+				v = kvs[1]
+			}
+			view.ColumnFormatter = v
+		}
+
+	}
 }
 
 func (r *router) SetViews(view *Views) RouterGroup {
