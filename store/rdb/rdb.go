@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2025-01-19 23:09:23
+ * @LastEditTime: 2025-08-31 11:31:12
  * @Description: 关系数据库配置
  */
 package rdb
@@ -193,7 +193,7 @@ func (store *rdbStore) Status() int8 {
 	if store.statTab == nil {
 		return -1
 	}
-	err := store.db.FirstOrCreate(&(store.statTab)).Error
+	err := store.db.FirstOrCreate(store.statTab).Error
 	if err != nil {
 		return -1
 	}
