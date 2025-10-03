@@ -200,7 +200,7 @@ func (r *router) operation(method, relativePath, pathName string, params any) (s
 	if params != nil {
 		rt := reflect.TypeOf(params)
 		requestParams[fmt.Sprintf("%s:%s/%s", method, r.group.BasePath(), relativePath)] = rt
-		paramStr, acceptType = genResourcesParams(rt)
+		paramStr, acceptType = r.genResourcesParams(method, relativePath, rt)
 
 	}
 	// 每个接口的参数存放在变量中便于后面查询使用
@@ -253,7 +253,7 @@ func (r *router) genResources(relativePath, name, method string) *Resources {
 	}
 	s.Meta = map[string]any{
 		"title": name,
-		"icon":  "el-icon-menu",
+		"icon":  "menu",
 		"type":  metaType,
 	}
 
@@ -294,12 +294,13 @@ const (
 // 如果参数结构体定义多个参数格式, 将其他参数无法正确使用
 //
 // TODO: 支持文件/多文件参数定义
-func genResourcesParams(rt reflect.Type) (params string, contentType string) {
+func (r *router) genResourcesParams(method, pathName string, rt reflect.Type) (params string, contentType string) {
 	if rt == nil {
 		return
 	}
 	data := make([]any, 0)
-
+	viewsList := make([]*Views, 0, 100)
+	// viewsMap := make(map[string]*Views, 100)
 	for i := 0; i < rt.NumField(); i++ {
 		item := make(map[string]any, 4)
 		field := rt.Field(i)
@@ -321,6 +322,15 @@ func genResourcesParams(rt reflect.Type) (params string, contentType string) {
 		if contentType == "" {
 			contentType = contentTypeCustom
 		}
+		view := &Views{
+			ResourceCode:  r.resource.Code,
+			ViewCode:      pathName,
+			ViewType:      "form",
+			ViewRole:      method,
+			ValueType:     "string",
+			Code:          key,
+			FormatterType: "input",
+		}
 
 		item[paramsKey] = key
 
@@ -333,6 +343,10 @@ func genResourcesParams(rt reflect.Type) (params string, contentType string) {
 		} else if strings.Contains(typeStr, paramsValueFloat) {
 			item[paramsValueType] = paramsValueNum
 		}
+		if strings.Contains(typeStr, "[]") {
+			item[paramsValueType] = "[]:" + paramsValueNum
+			view.DefaultValue = "[]"
+		}
 
 		// 用于前端API文档中的默认值
 		item[paramsValue] = field.Tag.Get(tagDefault)
@@ -341,8 +355,13 @@ func genResourcesParams(rt reflect.Type) (params string, contentType string) {
 		// 用于校验参数信息
 		item[tagBinding] = field.Tag.Get(tagBinding)
 		views := map[string]any{}
+
+		view.Name = field.Tag.Get(tagDesc)
+		view.ValueType = item[paramsValueType].(string)
+		view.Rules = field.Tag.Get(tagBinding)
+
 		for _, val := range strings.Split(field.Tag.Get(tagView), ";") {
-			kvs := strings.Split(val, "=")
+			kvs := strings.Split(val, ":")
 			k := kvs[0]
 			if len(k) == 0 {
 				continue
@@ -351,20 +370,53 @@ func genResourcesParams(rt reflect.Type) (params string, contentType string) {
 			switch kvs[0] {
 			case "select":
 				v = key
+				view.FormatterType = "select"
+				if len(kvs) > 1 {
+					view.Formatter = kvs[1]
+				}
 			case "multiple":
-				v = true
+				view.Multiple = "Y"
+			case "disabled", "key":
+				view.Disabled = "Y"
+			case "hidden":
+				view.Hidden = 1
+			case "switch":
+				view.FormatterType = "switch"
+				if view.ValueType == "string" {
+					view.CustomValue = []any{"Y", "N"}
+					view.DefaultValue = "N"
+				} else if view.ValueType == paramsValueNum {
+					view.CustomValue = []any{1, -1}
+					view.DefaultValue = "-1"
+				}
 			}
 
 			if len(kvs) > 1 {
 				v = kvs[1]
 			}
 			views[k] = v
+			// view.ColumnFormatter = v.(string)
 		}
 		item[tagView] = views
 		data = append(data, item)
 		paramsB, _ := json.Marshal(data)
 		params = string(paramsB)
+		if view.Code == "page_num" || view.Code == "page_size" || view.Code == "orders" {
+			continue
+		}
+		if view.Name == "" {
+			sub := r.core.ViewsMap[fmt.Sprintf("%s:%s", view.ResourceCode, view.Code)]
+			if sub != nil {
+				view.Name = sub.Name
+			}
+		}
+		if view.Name == "" {
+			view.Name = strings.ToUpper(view.Code)
+		}
+		viewsList = append(viewsList, view)
 	}
+
+	r.core.Views = append(r.core.Views, viewsList...)
 	return
 }
 
@@ -509,13 +561,13 @@ func (r *router) WithViews(item any, fs ...FuncSetViews) RouterGroup {
 
 	for i := 0; i < rt.NumField(); i++ {
 		field := rt.Field(i)
-
 		view := r.genViewColumns(field, options)
 		if view == nil {
 			continue
 		}
 
-		key := view.ResourceCode + ":" + view.ColumnCode
+		key := view.ResourceCode + ":" + view.Code
+
 		if r.core.ViewsMap[key] == nil {
 			r.core.Views = append(r.core.Views, view)
 			r.core.ViewsMap[key] = view
@@ -527,23 +579,24 @@ func (r *router) WithViews(item any, fs ...FuncSetViews) RouterGroup {
 }
 
 func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) (view *Views) {
-
 	view = &Views{
-		ResourceCode:    r.resource.Code,
-		ViewCode:        r.resource.Name,
-		ColumnValueType: "string",
+		ResourceCode: r.resource.Code,
+		ViewCode:     r.resource.Name,
+		ViewType:     "table",
+		ValueType:    "string",
+		Hidden:       -1,
 	}
 
 	// 获取前端参数名称
-	view.ColumnCode = field.Tag.Get(tagJson)
+	view.Code = field.Tag.Get(tagJson)
 	// TODO: 增加其他类型检查
 
 	// 处理前端参数名称, 从gorm标签或者自定义的desc标签获取
-	view.ColumnName = field.Tag.Get(tagDesc)
-	if view.ColumnName == "" {
+	view.Name = field.Tag.Get(tagDesc)
+	if view.Name == "" {
 		for _, tag := range strings.Split(field.Tag.Get(tagGorm), ";") {
 			if strings.Contains(tag, "comment:") {
-				view.ColumnName = strings.Split(tag, ":")[1]
+				view.Name = strings.Split(tag, ":")[1]
 				break
 			}
 		}
@@ -552,28 +605,29 @@ func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) 
 
 	// 后端参数类型转换为前端的参数类型
 	if strings.Contains(typeStr, paramsValueInt) {
-		view.ColumnValueType = paramsValueNum
+		view.ValueType = paramsValueNum
 	} else if strings.Contains(typeStr, paramsValueFloat) {
-		view.ColumnValueType = paramsValueNum
+		view.ValueType = paramsValueNum
 	} else if strings.Contains(typeStr, paramsValueBool) {
-		view.ColumnValueType = paramsValueBool
+		view.ValueType = paramsValueBool
 	} else if strings.Contains(typeStr, paramsValueBool) {
-		view.ColumnValueType = paramsValueBool
+		view.ValueType = paramsValueBool
 	}
 	// 对view标签进行处理
 	genViewTag(view, field.Tag.Get(tagView))
 
-	if view.ColumnCode == "" {
+	if view.Code == "" {
 		return nil
 	}
-
-	view.ViewCode = opt.ViewCode
-	view.ColumnWidth = opt.ColumnWidth
-	view.ColumnHeight = opt.ColumnHeight
-	view.ColumnHidden = opt.ColumnIsHidden
-	view.ColumnIsOrder = opt.ColumnIsOrder
-	view.ColumnFilter = opt.ColumnFilter
-	view.ColumnFixed = opt.ColumnFixed
+	if opt.ViewCode != "" {
+		view.ViewCode = opt.ViewCode
+	}
+	view.Width = opt.ColumnWidth
+	view.Height = opt.ColumnHeight
+	view.Hidden = opt.ColumnIsHidden
+	view.IsOrder = opt.ColumnIsOrder
+	view.Filter = opt.ColumnFilter
+	view.Fixed = opt.ColumnFixed
 	view.Account = opt.Account
 	return
 }
@@ -582,81 +636,74 @@ func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) 
 func genViewTag(view *Views, viewTag string) {
 	for _, tag := range strings.Split(viewTag, ";") {
 		if strings.Contains(tag, "code:") {
-			view.ColumnCode = strings.Split(tag, ":")[1]
+			view.Code = strings.Split(tag, ":")[1]
 		}
 		if strings.Contains(tag, "name:") {
-			view.ColumnName = strings.Split(tag, ":")[1]
+			view.Name = strings.Split(tag, ":")[1]
 		}
 		if strings.Contains(tag, "width:") {
 			i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
 			if i > 0 {
-				view.ColumnWidth = int16(i)
+				view.Width = int16(i)
 			}
 		}
 		if strings.Contains(tag, "height:") {
 			i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
 			if i > 0 {
-				view.ColumnHeight = int16(i)
+				view.Height = int16(i)
 			}
 		}
-		if strings.Contains(tag, "ishidden:") {
-			switch strings.Split(tag, ":")[1] {
-			case "true":
-				view.ColumnHidden = 1
-			case "false":
-				view.ColumnHidden = -1
-			default:
-				view.ColumnHidden = -1
-			}
+		if strings.Contains(tag, "hidden") {
+			view.Hidden = 1
 		}
 		if strings.Contains(tag, "isorder:") {
 			switch strings.Split(tag, ":")[1] {
 			case "true":
-				view.ColumnIsOrder = 1
+				view.IsOrder = 1
 			case "false":
-				view.ColumnIsOrder = -1
+				view.IsOrder = -1
 			default:
-				view.ColumnIsOrder = 1
+				view.IsOrder = 1
 			}
 		}
 		if strings.Contains(tag, "filter:") {
-			view.ColumnFilter = strings.Split(tag, ":")[1]
+			view.Filter = strings.Split(tag, ":")[1]
 		}
 		if strings.Contains(tag, "fixed:") {
-			view.ColumnFixed = strings.Split(tag, ":")[1]
+			view.Fixed = strings.Split(tag, ":")[1]
 		}
 		if strings.Contains(tag, "formatter_type:") {
-			view.ColumnFormatterType = strings.Split(tag, ":")[1]
+			view.FormatterType = strings.Split(tag, ":")[1]
 		}
 		if strings.Contains(tag, "formatter") {
-			view.ColumnFormatterType = "text"
+			view.FormatterType = "text"
 			kvs := strings.Split(tag, ":")
 			k := kvs[0]
 			if len(k) == 0 {
 				continue
 			}
-			var v = view.ColumnCode
+			var v = view.Code
 
 			if len(kvs) > 1 {
 				v = kvs[1]
 			}
-			view.ColumnFormatter = v
+			view.Formatter = v
 		}
 
 	}
 }
 
 func (r *router) SetViews(view *Views) RouterGroup {
-	key := view.ResourceCode + ":" + view.ColumnCode
+	key := view.ResourceCode + ":" + view.Code
 
-	r.core.ViewsMap[key].ColumnCode = view.ColumnCode
-	r.core.ViewsMap[key].ColumnName = view.ColumnName
-	r.core.ViewsMap[key].ColumnWidth = view.ColumnWidth
-	r.core.ViewsMap[key].ColumnHeight = view.ColumnHeight
-	r.core.ViewsMap[key].ColumnHidden = view.ColumnHidden
-	r.core.ViewsMap[key].ColumnIsOrder = view.ColumnIsOrder
-	r.core.ViewsMap[key].ColumnFilter = view.ColumnFilter
-	r.core.ViewsMap[key].ColumnFixed = view.ColumnFixed
+	r.core.ViewsMap[key].Code = view.Code
+	r.core.ViewsMap[key].Name = view.Name
+	r.core.ViewsMap[key].Width = view.Width
+	r.core.ViewsMap[key].Height = view.Height
+	r.core.ViewsMap[key].Hidden = view.Hidden
+	r.core.ViewsMap[key].IsOrder = view.IsOrder
+	r.core.ViewsMap[key].Filter = view.Filter
+	r.core.ViewsMap[key].Fixed = view.Fixed
 	r.core.ViewsMap[key].Account = view.Account
 
 	return r

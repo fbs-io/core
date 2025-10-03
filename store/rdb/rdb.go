@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 22:16:53
  * @LastEditors: reel
- * @LastEditTime: 2025-08-31 11:31:12
+ * @LastEditTime: 2025-09-21 15:04:46
  * @Description: 关系数据库配置
  */
 package rdb
@@ -254,10 +254,11 @@ func (store *rdbStore) Register(t Tabler, fs ...RegisterFunc) Store {
 				if err != nil {
 					return err
 				}
-
-				store.entityInfo[t.TableName()].IsMigrator = true
 			}
 		}
+
+		// 没有表时,执行自定义方法
+		store.entityInfo[t.TableName()].IsMigrator = !db.Migrator().HasTable(t)
 
 		err = db.AutoMigrate(t)
 		if err != nil {

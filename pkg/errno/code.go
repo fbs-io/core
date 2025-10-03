@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-11 22:19:24
  * @LastEditors: reel
- * @LastEditTime: 2024-08-20 07:46:25
+ * @LastEditTime: 2025-09-20 16:39:22
  * @Description: 定义常用的错误代码
  */
 package errno
@@ -59,6 +59,9 @@ var (
 	ERRNO_AUTH_PERMISSION  Errno = New(401, 40002, "用户无访问权限")
 	ERRNO_AUTH_USER_OR_PWD Errno = New(200, 40004, "账号或密码错误")
 	ERRNO_AUTH_ELSE_LOGIN  Errno = New(200, 40005, "已在其他地方登陆")
+
+	// 资源不存在
+	ERRNO_NOT_FOUND Errno = New(200, 40400, "资源不存在")
 
 	// 权限错误
 )

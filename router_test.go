@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-19 23:18:19
  * @LastEditors: reel
- * @LastEditTime: 2024-07-07 20:49:00
+ * @LastEditTime: 2025-09-21 23:24:21
  * @Description: 测试路由相关方法
  */
 
@@ -10,7 +10,6 @@ package core
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -24,14 +23,14 @@ func TestRouter(t *testing.T) {
 		OrgCode       string `json:"org_code" default:"001" binding:"required" desc:"组织代码, 唯一不可重复"`
 		OrgParentCode string `json:"org_parent_code" default:""  desc:"组织上级 code"`
 	}
-	rt := reflect.TypeOf(OrgCreateRequest{})
-	fmt.Println(genResourcesParams(rt))
-	fmt.Println(genResourcesParams(nil))
+	// rt := reflect.TypeOf(OrgCreateRequest{})
 
 	// 生产资源数据测试
 	rout := &router{
 		group: gin.New().Group("api"),
 	}
+	// fmt.Println(rout.genResourcesParams(rt))
+	// fmt.Println(rout.genResourcesParams(nil))
 	source := rout.genResources("api", "api", "")
 	fmt.Println(source)
 

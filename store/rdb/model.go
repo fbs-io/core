@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 06:04:12
  * @LastEditors: reel
- * @LastEditTime: 2024-10-01 14:40:40
+ * @LastEditTime: 2025-10-02 21:15:59
  * @Description: 定义常用的模型用于快速开发
  */
 
@@ -43,25 +43,35 @@ func (m *Model) getAuth(tx *gorm.DB) string {
 	}
 	return ""
 }
+
+// 用于创建时, 自动填充创建人和状态
+//
+// 需要在外层的model中调用实现
+//
+// 如果是分区表, 可以直接在分区表中实现, 不需要再调用该方法
 func (m *Model) BeforeCreate(tx *gorm.DB) error {
 	m.Status = 1
-	m.CreatedBy = m.getAuth(tx)
+	if m.CreatedBy == "" {
+		m.CreatedBy = m.getAuth(tx)
+	}
 	return nil
 }
 
+// 用于更新时, 自动填充更新人
+//
+// 需要在外层的model中调用实现
+//
+// 如果是分区表, 可以直接在分区表中实现, 不需要再调用该方法
 func (m *Model) BeforeUpdate(tx *gorm.DB) error {
-	m.UpdatedBy = m.getAuth(tx)
+	if m.UpdatedBy == "" {
+		m.UpdatedBy = m.getAuth(tx)
+	}
 	return nil
 }
 
-// func (m *Model) BeforeDelete(tx *gorm.DB) error {
-// 	m.DeletedBy = m.getAuth(tx)
-// 	return nil
-// }
+type ModeMapJson map[string]any
 
-type ModeMapJson map[string]interface{}
-
-func (j *ModeMapJson) Scan(value interface{}) error {
+func (j *ModeMapJson) Scan(value any) error {
 
 	bytes, ok := value.(string)
 	if !ok {
@@ -83,9 +93,9 @@ func (j ModeMapJson) Value() (driver.Value, error) {
 	return string(b), err
 }
 
-type ModeListJson []interface{}
+type ModeListJson []any
 
-func (j *ModeListJson) Scan(value interface{}) error {
+func (j *ModeListJson) Scan(value any) error {
 
 	bytes, ok := value.(string)
 	if !ok {
