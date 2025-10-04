@@ -371,6 +371,7 @@ func (r *router) genResourcesParams(method, pathName string, rt reflect.Type) (p
 			case "select":
 				v = key
 				view.FormatterType = "select"
+				view.Formatter = view.Code
 				if len(kvs) > 1 {
 					view.Formatter = kvs[1]
 				}
@@ -546,15 +547,7 @@ func (r *router) Use(middleware ...gin.HandlerFunc) RouterGroup {
 // 标签支持 字段: json, key, 描述: gorm, desc,
 func (r *router) WithViews(item any, fs ...FuncSetViews) RouterGroup {
 	rt := reflect.TypeOf(item)
-	options := &SetViewOptions{
-		ColumnWidth:    120,
-		ColumnHeight:   0,
-		ColumnIsHidden: -1,
-		ColumnIsOrder:  1,
-		ColumnFilter:   "Y",
-		ColumnFixed:    "N",
-		Account:        "system",
-	}
+	options := &SetViewOptions{}
 	for _, f := range fs {
 		f(options)
 	}
@@ -585,6 +578,12 @@ func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) 
 		ViewType:     "table",
 		ValueType:    "string",
 		Hidden:       -1,
+		Width:        120,
+		Height:       0,
+		IsOrder:      1,
+		Filter:       "Y",
+		Fixed:        "N",
+		Account:      "system",
 	}
 
 	// 获取前端参数名称
@@ -622,13 +621,30 @@ func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) 
 	if opt.ViewCode != "" {
 		view.ViewCode = opt.ViewCode
 	}
-	view.Width = opt.ColumnWidth
-	view.Height = opt.ColumnHeight
-	view.Hidden = opt.ColumnIsHidden
-	view.IsOrder = opt.ColumnIsOrder
-	view.Filter = opt.ColumnFilter
-	view.Fixed = opt.ColumnFixed
-	view.Account = opt.Account
+
+	if opt.ColumnWidth > 0 {
+		view.Width = opt.ColumnWidth
+	}
+
+	if opt.ColumnHeight > 0 {
+		view.Height = opt.ColumnHeight
+	}
+
+	if opt.ColumnIsHidden > 0 {
+		view.Hidden = opt.ColumnIsHidden
+	}
+	if opt.ColumnIsOrder > 0 {
+		view.IsOrder = opt.ColumnIsOrder
+	}
+	if opt.ColumnFilter != "" {
+		view.Filter = opt.ColumnFilter
+	}
+	if opt.ColumnFixed != "" {
+		view.Fixed = opt.ColumnFixed
+	}
+	if opt.Account != "" {
+		view.Account = opt.Account
+	}
 	return
 }
 
