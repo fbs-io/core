@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2025-10-02 11:25:19
+ * @LastEditTime: 2025-10-08 23:25:52
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -67,10 +67,11 @@ type ResourcesBase struct {
 	Params     string `json:"params" gorm:"column:resource_params;comment:前端请求参数"`             // db中存储的参数字符串
 	AcceptType string `json:"accept_type" gorm:"column:resource_accept_type;comment:前端请求参数类型"` // 约束接口传参方式
 	// 前端路由菜单用
-	IsRouter  int8            `json:"is_router" gorm:"column:resource_is_router;comment:前端用路由判断;index"`       // 主要用于某些button需要展示路由上
-	Path      string          `json:"path" gorm:"column:resource_path;comment:前端用路径;index"`                   // 前端用组件方法
-	Component string          `json:"component" gorm:"column:resource_component;comment:组件名称"`                // 前端组件名称
-	Meta      rdb.ModeMapJson `json:"meta" gorm:"column:resource_meta;type:varchar(1000);comment:前端用路由参数元信息"` // 前端组件原信息
+	IsRouter  int8            `json:"is_router" gorm:"column:resource_is_router;comment:前端用路由判断;index"`        // 主要用于某些button需要展示路由上
+	Path      string          `json:"path" gorm:"column:resource_path;comment:前端用路径;index"`                    // 前端用组件方法
+	Component string          `json:"component" gorm:"column:resource_component;comment:组件名称"`                 // 前端组件名称
+	Meta      rdb.ModeMapJson `json:"meta" gorm:"column:resource_meta;type:varchar(10000);comment:前端用路由参数元信息"` // 前端组件原信息
+	PageView  rdb.ModeMapJson `json:"page_view" gorm:"column:resource_views;type:varchar(10000);comment:前端视图配置信息"`
 }
 
 // 数据库字段
@@ -181,6 +182,42 @@ func (e *Resources) ParentCode() string {
 	return e.PCode
 }
 
+// 设置前端页面信息
+//
+// 整个页面级别的设置, 如宽度等
+
+type FuncSetPageViews func(options rdb.ModeMapJson)
+
+// 设置视图元素宽度
+func SetPageViewWidth(width int16) FuncSetPageViews {
+	return func(options rdb.ModeMapJson) {
+		options["ViewWidth"] = width
+	}
+}
+
+// 设置table用于选择的key, 前端默认id
+func SetPageTableKey(key string) FuncSetPageViews {
+	return func(options rdb.ModeMapJson) {
+		options["TableKey"] = key
+	}
+}
+
+// 用于控制显示的列
+func SetColumnsShow(columns string) FuncSetPageViews {
+	return func(options rdb.ModeMapJson) {
+		options["ColumnsShow"] = columns
+	}
+}
+
+func (e *Resources) SetPageViews(fns ...FuncSetPageViews) *Resources {
+	view := make(rdb.ModeMapJson, 100)
+	for _, fn := range fns {
+		fn(view)
+	}
+	e.PageView = view
+	return e
+}
+
 type OperateLog struct {
 	IP        string `json:"ip" gorm:"操作ip;index"`
 	User      string `json:"oper" gorm:"comment:操作用户;index"`
@@ -224,9 +261,8 @@ type Views struct {
 	Placeholder   string           `json:"placeholder" gorm:"column:placeholder;comment:表单组件提示信息"`
 	DefaultValue  string           `json:"defaultValue" gorm:"column:default_value;comment:表单组件默认值"`
 	CustomValue   rdb.ModeListJson `json:"customValue" gorm:"type:string;column:custom_value;comment:表单组件自定义值"`
-	// FormOptiions  string `json:"options" gorm:"column:items;comment:表单组件选项"`
-	// FormMessage   string `json:"message" gorm:"column:message;comment:表单组件提示信息"`
-	Account string `json:"account" gorm:"column:account;comment:账号"`
+	Depend        string           `json:"depend" gorm:"column:rely;comment:依赖字段"`
+	Account       string           `json:"account" gorm:"column:account;comment:账号"`
 	rdb.Model
 	rdb.ShardingModel
 }

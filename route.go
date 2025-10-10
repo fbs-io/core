@@ -197,6 +197,12 @@ func (r *router) operation(method, relativePath, pathName string, params any) (s
 	var (
 		paramStr, acceptType string
 	)
+	source = r.genResources(relativePath, pathName, method)
+	// 默认资源均需要授权才能访问
+	source.Type = SOURCE_TYPE_PERMISSION
+	resources = append(resources, source)
+	resourcesMap[source.Code] = source
+
 	if params != nil {
 		rt := reflect.TypeOf(params)
 		requestParams[fmt.Sprintf("%s:%s/%s", method, r.group.BasePath(), relativePath)] = rt
@@ -204,12 +210,8 @@ func (r *router) operation(method, relativePath, pathName string, params any) (s
 
 	}
 	// 每个接口的参数存放在变量中便于后面查询使用
-	source = r.genResources(relativePath, pathName, method)
 	source.Params, source.AcceptType = paramStr, acceptType
-	// 默认资源均需要授权才能访问
-	source.Type = SOURCE_TYPE_PERMISSION
-	resources = append(resources, source)
-	resourcesMap[source.Code] = source
+
 	return
 }
 
@@ -390,13 +392,27 @@ func (r *router) genResourcesParams(method, pathName string, rt reflect.Type) (p
 					view.CustomValue = []any{1, -1}
 					view.DefaultValue = "-1"
 				}
+			case "date":
+				view.FormatterType = "date"
+				view.Formatter = "YYYY-MM-DD"
+				if len(kvs) > 1 {
+					view.Formatter = kvs[1]
+				}
+			case "filter":
+				view.Filter = kvs[1]
+			case "span":
+				span, _ := strconv.Atoi(kvs[1])
+				view.Width = int16(span)
+			case "depend":
+				view.Depend = kvs[1]
+			case "default":
+				view.DefaultValue = kvs[1]
 			}
 
 			if len(kvs) > 1 {
 				v = kvs[1]
 			}
 			views[k] = v
-			// view.ColumnFormatter = v.(string)
 		}
 		item[tagView] = views
 		data = append(data, item)
@@ -413,6 +429,9 @@ func (r *router) genResourcesParams(method, pathName string, rt reflect.Type) (p
 		}
 		if view.Name == "" {
 			view.Name = strings.ToUpper(view.Code)
+		}
+		if view.FormatterType == "input" && view.ValueType == "number" {
+			view.FormatterType = "number"
 		}
 		viewsList = append(viewsList, view)
 	}
@@ -581,7 +600,7 @@ func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) 
 		Width:        120,
 		Height:       0,
 		IsOrder:      1,
-		Filter:       "Y",
+		Filter:       "",
 		Fixed:        "N",
 		Account:      "system",
 	}
@@ -611,6 +630,9 @@ func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) 
 		view.ValueType = paramsValueBool
 	} else if strings.Contains(typeStr, paramsValueBool) {
 		view.ValueType = paramsValueBool
+	}
+	if view.ValueType == paramsValueNum {
+		view.FormatterType = "number"
 	}
 	// 对view标签进行处理
 	genViewTag(view, field.Tag.Get(tagView))
@@ -690,6 +712,7 @@ func genViewTag(view *Views, viewTag string) {
 		}
 		if strings.Contains(tag, "formatter_type:") {
 			view.FormatterType = strings.Split(tag, ":")[1]
+
 		}
 		if strings.Contains(tag, "formatter") {
 			view.FormatterType = "text"
