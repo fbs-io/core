@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 06:55:41
  * @LastEditors: reel
- * @LastEditTime: 2025-10-11 20:22:13
+ * @LastEditTime: 2025-10-11 20:39:48
  * @Description: 根据条件结构体, 自动构建查询语句, 并返回gorm.DB, 用于扩展
  */
 package rdb
@@ -139,7 +139,8 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 			cb.Columns = valueType.String()
 		default:
 			ckey := "%s %s %s"
-			ckeyOr := "%s %s %s or"
+			ckeyOr := "%s or %s %s "
+			ckeyAnd := "%s or %s %s "
 
 			// 处理查询在某个范围, 如 1< age <10
 			conditions := strings.Split(tag.Get("conditions"), "=")
@@ -173,15 +174,21 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 			default:
 				condition = fmt.Sprintf("%s ", condition)
 			}
-			keys := strings.Split(key, "or")
+			keys := strings.Split(key, "|")
 			key = ""
-			for i, k := range keys {
-				if i != len(keys)-1 {
+			key = fmt.Sprintf(ckey, key, keys[0], condition)
+
+			if len(keys) > 1 {
+				for _, k := range keys[1:] {
 					key = fmt.Sprintf(ckeyOr, key, k, condition)
-				} else {
-					key = fmt.Sprintf(ckey, key, k, condition)
+				}
+			} else {
+				keys = strings.Split(key, "&")
+				for _, k := range keys[1:] {
+					key = fmt.Sprintf(ckeyAnd, key, k, condition)
 				}
 			}
+
 			cb.Where[key] = valueType
 		}
 	}
