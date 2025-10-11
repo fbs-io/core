@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 06:04:12
  * @LastEditors: reel
- * @LastEditTime: 2025-10-02 21:15:59
+ * @LastEditTime: 2025-10-11 19:24:50
  * @Description: 定义常用的模型用于快速开发
  */
 
@@ -34,6 +34,11 @@ type Model struct {
 type ModelQuery struct {
 	ID     uint `json:"id"`
 	Status int8 `json:"status"`
+}
+
+// 通用查询查询字段处理, 用于过滤删除的数据
+type ModelQueryDeleteAt struct {
+	DeletedAT DeletedAt `json:"-" gorm:"index;softDelete:milli"` // 删除时间
 }
 
 func (m *Model) getAuth(tx *gorm.DB) string {

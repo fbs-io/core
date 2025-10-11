@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 06:55:41
  * @LastEditors: reel
- * @LastEditTime: 2024-07-07 13:50:05
+ * @LastEditTime: 2025-10-11 20:22:13
  * @Description: 根据条件结构体, 自动构建查询语句, 并返回gorm.DB, 用于扩展
  */
 package rdb
@@ -56,7 +56,7 @@ func NewCondition() *Condition {
 func (store *rdbStore) BuildQuery(cb *Condition) (tx *gorm.DB) {
 	tx = store.DB()
 	for key, value := range cb.Where {
-		values := make([]interface{}, 0, 100)
+		values := make([]any, 0, 100)
 		switch value.Kind() {
 		// 对切片处理
 		case reflect.Slice:
@@ -66,7 +66,13 @@ func (store *rdbStore) BuildQuery(cb *Condition) (tx *gorm.DB) {
 			}
 			tx = tx.Where(key, values)
 		default:
-			tx = tx.Where(key, value.Interface())
+			count := strings.Count(key, "?")
+			valuesList := make([]any, 0, count)
+			for i := 0; i < count; i++ {
+				valuesList = append(valuesList, value.Interface())
+
+			}
+			tx = tx.Where(key, valuesList...)
 
 		}
 	}
@@ -121,7 +127,6 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 		if key == "" {
 			continue
 		}
-
 		valueType := params.Elem().Field(i)
 		switch key {
 		case "page_size":
@@ -133,10 +138,12 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 		case "coloums":
 			cb.Columns = valueType.String()
 		default:
-			ckey := "%s %s"
+			ckey := "%s %s %s"
+			ckeyOr := "%s %s %s or"
 
 			// 处理查询在某个范围, 如 1< age <10
-			conditions := strings.Split(tag.Get("conditions"), " ")
+			conditions := strings.Split(tag.Get("conditions"), "=")
+			// 判断是否有查询条件, 如果没有
 			condition := conditions[0]
 			if len(conditions) >= 2 {
 				key = conditions[1]
@@ -153,21 +160,29 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 				condition = fmt.Sprintf("%s (?)", eq)
 			// not in
 			case notin:
-				condition = "not in (?)"
+				condition = "not in ?"
 			case like:
-				condition = "like (?)"
+				condition = "like ?"
 				valueType.SetString(fmt.Sprintf("%%%v%%", valueType.Interface()))
 			case likeLeft:
-				condition = "like (?)"
+				condition = "like ?"
 				valueType.SetString(fmt.Sprintf("%%%v", valueType.Interface()))
 			case likeRight:
-				condition = "like (?)"
+				condition = "like ?"
 				valueType.SetString(fmt.Sprintf("%v%%", valueType.Interface()))
 			default:
-				condition = fmt.Sprintf("%s (?)", condition)
+				condition = fmt.Sprintf("%s ", condition)
 			}
-
-			cb.Where[fmt.Sprintf(ckey, key, condition)] = valueType
+			keys := strings.Split(key, "or")
+			key = ""
+			for i, k := range keys {
+				if i != len(keys)-1 {
+					key = fmt.Sprintf(ckeyOr, key, k, condition)
+				} else {
+					key = fmt.Sprintf(ckey, key, k, condition)
+				}
+			}
+			cb.Where[key] = valueType
 		}
 	}
 	return cb
