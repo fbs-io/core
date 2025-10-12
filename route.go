@@ -418,9 +418,7 @@ func (r *router) genResourcesParams(method, pathName string, rt reflect.Type) (p
 		data = append(data, item)
 		paramsB, _ := json.Marshal(data)
 		params = string(paramsB)
-		if view.Code == "page_num" || view.Code == "page_size" || view.Code == "orders" {
-			continue
-		}
+
 		if view.Name == "" {
 			sub := r.core.ViewsMap[fmt.Sprintf("%s:%s", view.ResourceCode, view.Code)]
 			if sub != nil {

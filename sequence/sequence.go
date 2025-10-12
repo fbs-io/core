@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-09-19 05:06:15
  * @LastEditors: reel
- * @LastEditTime: 2024-07-07 16:00:29
+ * @LastEditTime: 2025-10-12 18:13:08
  * @Description: 业务编码生成器
  */
 package sequence
@@ -119,7 +119,8 @@ func (s *sequenceMode) Code(fs ...WarpCodeFunc) string {
 
 	// 获取序列号及设置序列号
 	var sequenceValue int
-	var index = strings.Join(codeList, s.split)
+	// 增加固定前缀,
+	var index = fmt.Sprintf("%s::%s", "SEQ::", strings.Join(codeList, s.split))
 	value := s.cache.Get(index)
 	if value == "" {
 		sequenceValue = 1

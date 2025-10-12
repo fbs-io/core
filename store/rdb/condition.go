@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 06:55:41
  * @LastEditors: reel
- * @LastEditTime: 2025-10-11 20:39:48
+ * @LastEditTime: 2025-10-12 19:45:16
  * @Description: 根据条件结构体, 自动构建查询语句, 并返回gorm.DB, 用于扩展
  */
 package rdb
@@ -16,18 +16,48 @@ import (
 )
 
 const (
-	eq = "="
-	ne = "<>"
-	lt = "<"
-	le = "<="
-	qe = ">="
-	qt = ">"
-	in = "in"
+	eqKey        = "eq"    // 等于
+	neKey        = "ne"    // 不等于
+	ltKey        = "lt"    // 小于
+	leKey        = "le"    // 小于或等于
+	qeKey        = "qe"    // 大于或等于
+	qtKey        = "qt"    // 大于
+	inKey        = "in"    // 包含
+	niKey        = "ni"    // 不包含
+	likeKey      = "like"  // 模糊查询
+	likeLeftKey  = "like%" //	左侧模糊查询
+	likeRightKey = "%like" //	右侧模糊查询
 
-	notin     = "ni"
-	like      = "like"
-	likeRight = "like%"
-	likeLeft  = "%like"
+	eqVal        = "= ?"
+	neVal        = "<> ?"
+	ltVal        = "< ?"
+	leVal        = "<= ?"
+	qeVal        = ">= ?"
+	qtVal        = "> ?"
+	inVal        = "in ?"
+	niVal        = "not in (?)"
+	like         = "like ? "
+	likeLeftVal  = "like ? "
+	likeRightVal = "like ? "
+
+	and = "&"
+	or  = "|"
+)
+
+var (
+	ckeys = map[string]string{
+		eqKey:        eqVal,
+		neKey:        neVal,
+		ltKey:        ltVal,
+		leKey:        leVal,
+		qeKey:        qeVal,
+		qtKey:        qtVal,
+		inKey:        inVal,
+		niKey:        niVal,
+		likeKey:      like,
+		likeRightKey: likeRightVal,
+		likeLeftKey:  likeLeftVal,
+	}
 )
 
 type Condition struct {
@@ -142,54 +172,43 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 			ckeyOr := "%s or %s %s "
 			ckeyAnd := "%s or %s %s "
 
-			// 处理查询在某个范围, 如 1< age <10
 			conditions := strings.Split(tag.Get("conditions"), "=")
 			// 判断是否有查询条件, 如果没有
-			condition := conditions[0]
+			ck := conditions[0]
 			if len(conditions) >= 2 {
 				key = conditions[1]
 			}
 			// 不生成查询条件
-			if condition == "-" {
+			if ck == "-" {
 				continue
 			}
-
-			// 对模糊查询的单独处理
-			switch condition {
-			// 条件为空, 默认是等于
-			case "":
-				condition = fmt.Sprintf("%s (?)", eq)
-			// not in
-			case notin:
-				condition = "not in ?"
-			case like:
-				condition = "like ?"
+			condition := ckeys[ck]
+			// // 对模糊查询的值单独处理
+			switch ck {
+			case likeKey:
 				valueType.SetString(fmt.Sprintf("%%%v%%", valueType.Interface()))
-			case likeLeft:
-				condition = "like ?"
+			case likeRightKey:
 				valueType.SetString(fmt.Sprintf("%%%v", valueType.Interface()))
-			case likeRight:
-				condition = "like ?"
+			case likeLeftKey:
 				valueType.SetString(fmt.Sprintf("%v%%", valueType.Interface()))
-			default:
-				condition = fmt.Sprintf("%s ", condition)
 			}
-			keys := strings.Split(key, "|")
-			key = ""
-			key = fmt.Sprintf(ckey, key, keys[0], condition)
+			// 对or和and的值单独处理
+			keys := strings.Split(key, or)
+			keyAll := ""
+			keyAll = fmt.Sprintf(ckey, keyAll, keys[0], condition)
 
 			if len(keys) > 1 {
 				for _, k := range keys[1:] {
-					key = fmt.Sprintf(ckeyOr, key, k, condition)
+					keyAll = fmt.Sprintf(ckeyOr, keyAll, k, condition)
 				}
 			} else {
-				keys = strings.Split(key, "&")
+				keys = strings.Split(key, and)
 				for _, k := range keys[1:] {
-					key = fmt.Sprintf(ckeyAnd, key, k, condition)
+					keyAll = fmt.Sprintf(ckeyAnd, keyAll, k, condition)
 				}
 			}
 
-			cb.Where[key] = valueType
+			cb.Where[keyAll] = valueType
 		}
 	}
 	return cb
