@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 06:55:41
  * @LastEditors: reel
- * @LastEditTime: 2025-10-12 19:45:16
+ * @LastEditTime: 2025-10-12 20:18:29
  * @Description: 根据条件结构体, 自动构建查询语句, 并返回gorm.DB, 用于扩展
  */
 package rdb
@@ -183,6 +183,9 @@ func GenConditionWithParams(params reflect.Value) *Condition {
 				continue
 			}
 			condition := ckeys[ck]
+			if condition == "" {
+				condition = ckeys[eqKey]
+			}
 			// // 对模糊查询的值单独处理
 			switch ck {
 			case likeKey:
