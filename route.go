@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/fbs-io/core/store/rdb"
 	"github.com/gin-gonic/gin"
 )
 
@@ -384,13 +385,35 @@ func (r *router) genResourcesParams(method, pathName string, rt reflect.Type) (p
 			case "hidden":
 				view.Hidden = 1
 			case "switch":
+				// 如果文字类型, 设置默认值Y,N
+				view.Formatter = view.Code
 				view.FormatterType = "switch"
-				if view.ValueType == "string" {
-					view.CustomValue = []any{"Y", "N"}
-					view.DefaultValue = "N"
-				} else if view.ValueType == paramsValueNum {
+				view.CustomValue = []any{"Y", "N"}
+				view.DefaultValue = "N"
+				// 如果数字类型, 设置默认值1,-1
+				if view.ValueType == paramsValueNum {
 					view.CustomValue = []any{1, -1}
 					view.DefaultValue = "-1"
+				}
+
+				// 支持自定义, 格式: switch:1,2
+				if len(kvs) > 1 {
+					vaList := strings.Split(kvs[1], ",")
+					view.CustomValue = make(rdb.ModeListJson, 0, len(vaList))
+					for _, val := range vaList {
+						if view.ValueType == paramsValueNum {
+							num, _ := strconv.Atoi(val)
+							view.CustomValue = append(view.CustomValue, num)
+						} else {
+							view.CustomValue = append(view.CustomValue, val)
+						}
+					}
+				}
+			case "radio":
+				view.FormatterType = "radio"
+				view.Formatter = view.Code
+				if len(kvs) > 1 {
+					view.Formatter = kvs[1]
 				}
 			case "date":
 				view.FormatterType = "date"
