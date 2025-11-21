@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2025-10-08 23:25:52
+ * @LastEditTime: 2025-11-09 21:19:35
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -223,6 +223,7 @@ type OperateLog struct {
 	User      string `json:"oper" gorm:"comment:操作用户;index"`
 	Content   string `json:"content" gorm:"comment:业务操作内容"`
 	Result    string `json:"result" gorm:"comment:结果"`
+	Params    string `json:"params" gorm:"comment:请求参数"`
 	Method    string `json:"method" gorm:"comment:请求方法;index"`
 	Api       string `json:"api" gorm:"comment:操作接口;index"`
 	ApiName   string `json:"api_name" gorm:"comment:接口名称"`
@@ -241,9 +242,12 @@ type Views struct {
 	ResourceCode  string           `json:"resource_code" gorm:"column:resource_code;comment:资源code;index"`
 	ViewCode      string           `json:"view_code" gorm:"column:view_code;comment:视图code;index"`
 	ViewType      string           `json:"view_type" gorm:"column:view_type;comment:视图类型,如表格, 表单"`
+	ViewItemCode  string           `json:"view_item_code" gorm:"column:view_item_code;comment:视图项code;index"`
 	ViewRole      string           `json:"view_role" gorm:"column:view_role;comment:视图功能,如新增, 编辑, 删除"`
 	Code          string           `json:"code" gorm:"column:code;comment:字段code;index"`
 	Name          string           `json:"name" gorm:"column:name;comment:字段名称"`
+	Key           string           `json:"key" gorm:"column:key;comment:主键"`
+	Calc          string           `json:"calc" gorm:"column:calc;comment:计算字段"`
 	ValueType     string           `json:"value_type" gorm:"column:value_type;comment:字段值类型,如string, int, float"`
 	Width         int16            `json:"width" gorm:"column:width;comment:宽度"`
 	Height        int16            `json:"height" gorm:"column:height;comment:高度"`
@@ -261,7 +265,7 @@ type Views struct {
 	Placeholder   string           `json:"placeholder" gorm:"column:placeholder;comment:表单组件提示信息"`
 	DefaultValue  string           `json:"defaultValue" gorm:"column:default_value;comment:表单组件默认值"`
 	CustomValue   rdb.ModeListJson `json:"customValue" gorm:"type:string;column:custom_value;comment:表单组件自定义值"`
-	Depend        string           `json:"depend" gorm:"column:rely;comment:依赖字段"`
+	Depend        string           `json:"depend" gorm:"column:depend;comment:依赖字段"`
 	Account       string           `json:"account" gorm:"column:account;comment:账号"`
 	rdb.Model
 	rdb.ShardingModel

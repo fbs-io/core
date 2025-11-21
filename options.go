@@ -2,11 +2,16 @@
  * @Author: reel
  * @Date: 2023-07-23 22:01:29
  * @LastEditors: reel
- * @LastEditTime: 2024-10-06 23:00:39
+ * @LastEditTime: 2025-11-08 18:47:58
  * @Description: 初始化core配置
  */
 
 package core
+
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type options struct {
 	limitSize     int    // 最多存储的令牌个数
@@ -61,10 +66,11 @@ func SetSessionTTL(ttl int) FuncCores {
 }
 
 type operateOpt struct {
-	content string      // 操作日志业务内容
-	result  interface{} // 操作结果
-	isSet   bool        // 设置操作日志
-
+	content string // 操作日志业务内容
+	result  any    // 操作结果
+	isSet   bool   // 设置操作日志
+	params  string // 参数
+	user    string // 用户
 }
 
 type FuncOperateOpt func(*operateOpt)
@@ -77,9 +83,38 @@ func SetContent(content string) FuncOperateOpt {
 }
 
 // 设置 返回结果
-func SetResult(result interface{}) FuncOperateOpt {
+func SetResult(result any) FuncOperateOpt {
 	return func(oo *operateOpt) {
 		oo.result = result
+	}
+}
+func SetResultByID(result any) FuncOperateOpt {
+	return func(oo *operateOpt) {
+		oo.result = fmt.Sprintf("id: %v", result)
+	}
+}
+
+func SetResultByCode(result any) FuncOperateOpt {
+	return func(oo *operateOpt) {
+		oo.result = fmt.Sprintf("code: %v", result)
+	}
+}
+func SetUser(user string) FuncOperateOpt {
+	return func(oo *operateOpt) {
+		oo.user = user
+	}
+}
+func SetParams(params any) FuncOperateOpt {
+	return func(oo *operateOpt) {
+		if params == nil {
+			return
+		}
+		paramsB, err := json.Marshal(params)
+		if err != nil {
+			oo.params = fmt.Sprintf("params: %v", params)
+			return
+		}
+		oo.params = string(paramsB)
 	}
 }
 

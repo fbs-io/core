@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-15 07:35:00
  * @LastEditors: reel
- * @LastEditTime: 2025-01-12 23:09:45
+ * @LastEditTime: 2025-11-08 18:46:55
  * @Description: 基于gin的上下文进行封装
  */
 package core
@@ -56,33 +56,33 @@ var (
 type Context interface {
 	// ShouldBindQuery 反序列化 querystring
 	// tag: `form:"xxx"` (注：不要写成 query)
-	ShouldBindQuery(obj interface{}) error
+	ShouldBindQuery(obj any) error
 
 	// ShouldBindPostForm 反序列化 postform (querystring会被忽略)
 	// tag: `form:"xxx"`
-	ShouldBindPostForm(obj interface{}) error
+	ShouldBindPostForm(obj any) error
 
 	// ShouldBindForm 同时反序列化 querystring 和 postform;
 	// 当 querystring 和 postform 存在相同字段时，postform 优先使用。
 	// tag: `form:"xxx"`
-	ShouldBindForm(obj interface{}) error
+	ShouldBindForm(obj any) error
 
 	// ShouldBindJSON 反序列化 postjson
 	// tag: `json:"xxx"`
-	ShouldBindJSON(obj interface{}) error
+	ShouldBindJSON(obj any) error
 
 	// ShouldBindURI 反序列化 path 参数(如路由路径为 /user/:name)
 	// tag: `uri:"xxx"`
-	ShouldBindURI(obj interface{}) error
+	ShouldBindURI(obj any) error
 
 	// Redirect 重定向
 	Redirect(code int, location string)
 
 	// HTML 返回界面
-	HTML(name string, obj interface{})
+	HTML(name string, obj any)
 
 	// 返回 Json
-	JSON(data interface{}, funcs ...FuncOperateOpt)
+	JSON(data any, funcs ...FuncOperateOpt)
 
 	// Header 获取 Header 对象
 	Header() http.Header
@@ -128,7 +128,7 @@ type Context interface {
 	ResourceCode() string
 
 	// 终止并返回信息
-	AbortWithError(interface{})
+	AbortWithError(any)
 
 	// gin的next方法
 	Next()
@@ -153,10 +153,10 @@ type Context interface {
 
 	// gin上下文设置
 	// CtxGet 获取上下文自定义的一些参数
-	CtxGet(key string) interface{}
+	CtxGet(key string) any
 
 	// 设置自定义参数在上下文中
-	CtxSet(key string, v interface{})
+	CtxSet(key string, v any)
 
 	// 返回通过参数构建好查询参数参数的gorm.DB
 	TX(optFunc ...TxOptsFunc) *gorm.DB
@@ -177,10 +177,10 @@ type Context interface {
 	CacheDelete(key string) error
 
 	// 设置缓存对象
-	CacheSetWithObj(key string, value interface{}, funcs ...cache.OptFunc) error
+	CacheSetWithObj(key string, value any, funcs ...cache.OptFunc) error
 
 	//获取缓存对象
-	CacheGetWithObj(key string, result interface{}) error
+	CacheGetWithObj(key string, result any) error
 
 	// 获取分区DB对象, 用于事物处理
 	ShardingTx() *gorm.DB
@@ -217,7 +217,7 @@ var _ Context = (*context)(nil)
 
 // 定义上下文池, 减少内存频繁申请开销, 提高性能
 var ctxPool = &sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return new(context)
 	},
 }
@@ -248,32 +248,32 @@ func (ctx *context) CtxGetParams() any {
 
 // ShouldBindQuery 反序列化querystring
 // tag: `form:"xxx"` (注：不要写成query)
-func (c *context) ShouldBindQuery(obj interface{}) error {
+func (c *context) ShouldBindQuery(obj any) error {
 	return c.ctx.ShouldBindWith(obj, binding.Query)
 }
 
 // ShouldBindPostForm 反序列化 postform (querystring 会被忽略)
 // tag: `form:"xxx"`
-func (c *context) ShouldBindPostForm(obj interface{}) error {
+func (c *context) ShouldBindPostForm(obj any) error {
 	return c.ctx.ShouldBindWith(obj, binding.FormPost)
 }
 
 // ShouldBindForm 同时反序列化querystring和postform;
 // 当querystring和postform存在相同字段时，postform优先使用。
 // tag: `form:"xxx"`
-func (c *context) ShouldBindForm(obj interface{}) error {
+func (c *context) ShouldBindForm(obj any) error {
 	return c.ctx.ShouldBindWith(obj, binding.Form)
 }
 
 // ShouldBindJSON 反序列化postjson
 // tag: `json:"xxx"`
-func (c *context) ShouldBindJSON(obj interface{}) error {
+func (c *context) ShouldBindJSON(obj any) error {
 	return c.ctx.ShouldBindWith(obj, binding.JSON)
 }
 
 // ShouldBindURI 反序列化path参数(如路由路径为 /user/:name)
 // tag: `uri:"xxx"`
-func (c *context) ShouldBindURI(obj interface{}) error {
+func (c *context) ShouldBindURI(obj any) error {
 	return c.ctx.ShouldBindUri(obj)
 }
 
@@ -346,11 +346,11 @@ func (c *context) URI() string {
 	return uri
 }
 
-func (c *context) HTML(name string, obj interface{}) {
+func (c *context) HTML(name string, obj any) {
 	c.ctx.HTML(200, name+".html", obj)
 }
 
-func (c *context) JSON(data interface{}, funcs ...FuncOperateOpt) {
+func (c *context) JSON(data any, funcs ...FuncOperateOpt) {
 
 	en, ok := data.(errno.Errno)
 	if ok {
@@ -394,12 +394,12 @@ func (c *context) Ctx() *gin.Context {
 }
 
 // 终止路由并返回错误信息
-func (c *context) AbortWithError(err interface{}) {
+func (c *context) AbortWithError(err any) {
 	c.ctx.JSON(200, err)
 	c.ctx.Abort()
 }
 
-func (c *context) CtxGet(key string) interface{} {
+func (c *context) CtxGet(key string) any {
 	v, ok := c.ctx.Get(key)
 	if ok {
 		return v
@@ -407,7 +407,7 @@ func (c *context) CtxGet(key string) interface{} {
 	return nil
 }
 
-func (c *context) CtxSet(key string, v interface{}) {
+func (c *context) CtxSet(key string, v any) {
 	c.ctx.Set(key, v)
 }
 
@@ -531,7 +531,7 @@ func (ctx *context) CacheGet(key string) string {
 }
 
 // 设置缓存对象
-func (ctx *context) CacheSetWithObj(key string, value interface{}, funcs ...cache.OptFunc) error {
+func (ctx *context) CacheSetWithObj(key string, value any, funcs ...cache.OptFunc) error {
 	vb, err := json.Marshal(value)
 	if err != nil {
 		return err
@@ -540,7 +540,7 @@ func (ctx *context) CacheSetWithObj(key string, value interface{}, funcs ...cach
 }
 
 // 根据key获取单个缓存对象
-func (ctx *context) CacheGetWithObj(key string, res interface{}) error {
+func (ctx *context) CacheGetWithObj(key string, res any) error {
 	vbs := ctx.core.Cache().Get(key)
 	if vbs == "" {
 		return errors.New("没有缓存数据")
@@ -612,7 +612,6 @@ func setOperateLog(ctx *context, en errno.Errno, funcs ...FuncOperateOpt) {
 			return
 		}
 	}()
-
 	// 设置配置项
 	opt := &operateOpt{}
 	for _, fs := range funcs {
@@ -634,15 +633,15 @@ func setOperateLog(ctx *context, en errno.Errno, funcs ...FuncOperateOpt) {
 	if en.Code() != errno.ERRNO_OK.Code() {
 		res = "失败"
 	}
-	content := fmt.Sprintf("%s%s%v%s", auth, resource.Desc, opt.result, res)
+	content := fmt.Sprintf("%s%s %v %s", auth, resource.Desc, opt.result, res)
 	if opt.result == nil {
 		content = fmt.Sprintf("%s%s%s", auth, resource.Desc, res)
-		if res == "失败" {
-			if en.Details() == nil {
-				content = fmt.Sprintf("%s%s%s, 错误:%s", auth, resource.Desc, res, en.Message())
-			} else {
-				content = fmt.Sprintf("%s%s%s, 错误:%s details:%v", auth, resource.Desc, res, en.Message(), en.Details())
-			}
+	}
+	if res == "失败" {
+		if en.Details() == nil {
+			content = fmt.Sprintf("%s, 错误:%s", content, en.Message())
+		} else {
+			content = fmt.Sprintf("%s, 错误:%s, 详情:%v", content, en.Message(), en.Details())
 		}
 	}
 
@@ -659,6 +658,20 @@ func setOperateLog(ctx *context, en errno.Errno, funcs ...FuncOperateOpt) {
 		ApiName:   resource.Desc,
 		TraceID:   ctx.ctx.Request.Header.Get(consts.REQUEST_HEADER_TRACE_ID),
 		OperateID: ctx.ctx.Request.Header.Get(consts.REQUEST_HEADER_OPERATE_ID),
+	}
+	if opt.params != "" {
+		operateLog.Params = opt.params
+	} else {
+		params := ctx.CtxGetParams()
+		paramsB, err := json.Marshal(params)
+		if err != nil {
+			operateLog.Params = fmt.Sprintf("params: %v", params)
+		} else {
+			operateLog.Params = string(paramsB)
+		}
+	}
+	if opt.user != "" {
+		operateLog.User = opt.user
 	}
 	operateLog.ShadingKey = ctx.ShardingKey()
 	err := ctx.Core().RDB().DB().Create(operateLog).Error

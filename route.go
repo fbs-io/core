@@ -4,15 +4,13 @@ import (
 	// "fbs/internal/core/apidoc"
 	// "fbs/internal/core/means"
 	// "fbs/pkg/convx"
-	"encoding/json"
+
 	"fmt"
 	"path"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/fbs-io/core/store/rdb"
 	"github.com/gin-gonic/gin"
 )
 
@@ -45,6 +43,8 @@ type RouterGroup interface {
 
 	IRoutes
 
+	IRoutesAgg
+
 	RouterResource
 }
 
@@ -69,6 +69,30 @@ type IRoutes interface {
 	// PATCH(string, ...HandlerFunc)
 	// OPTIONS(string, ...HandlerFunc)
 	// HEAD(string, ...HandlerFunc)
+}
+
+type IRoutesAggItem struct {
+	RelativePath string
+	PathName     string
+	Params       any
+	Handler      HandlerFunc
+}
+
+// IRoutesAgg 包装gin的IRoutes
+type IRoutesAgg interface {
+	// Any(string, ...HandlerFunc)
+	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
+	//参数为如果为空, 该方法不会在 api 文档中进行注册
+	GETAgg(*IRoutesAggItem, ...HandlerFunc) (resource *Resources)
+	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
+	//参数为如果为空, 该方法不会在 api 文档中进行注册
+	PUTAgg(*IRoutesAggItem, ...HandlerFunc) (resource *Resources)
+	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
+	//参数为如果为空, 该方法不会在 api 文档中进行注册
+	POSTAgg(*IRoutesAggItem, ...HandlerFunc) (resource *Resources)
+	//需要填写相对路由路径, 名称, 参数, 及中间件, 用于在 api 文档和菜单中注册
+	//参数为如果为空, 该方法不会在 api 文档中进行注册
+	DELETEAgg(*IRoutesAggItem, ...HandlerFunc) (resource *Resources)
 }
 
 type router struct {
@@ -190,13 +214,50 @@ func (r *router) HEAD(relativePath string, handlers ...HandlerFunc) {
 	r.group.HEAD(relativePath, wrapHandlers(r.core, handlers...)...)
 }
 
+func genNewHandlers(handler HandlerFunc, handlers ...HandlerFunc) (newHandlers []HandlerFunc) {
+	newHandlers = make([]HandlerFunc, 0, 10)
+	newHandlers = append(newHandlers, handler)
+	newHandlers = append(newHandlers, handlers...)
+	return newHandlers
+}
+
+func (r *router) GETAgg(item *IRoutesAggItem, handlers ...HandlerFunc) (source *Resources) {
+	r.group.GET(item.RelativePath, wrapHandlers(r.core, genNewHandlers(item.Handler, handlers...)...)...)
+	return r.operation("GET", item.RelativePath, item.PathName, item.Params)
+}
+
+// Post请求方式封装
+//
+// 参数如果为空, 该方法不会被记录在资源表中
+func (r *router) POSTAgg(item *IRoutesAggItem, handlers ...HandlerFunc) (source *Resources) {
+	r.group.POST(item.RelativePath, wrapHandlers(r.core, genNewHandlers(item.Handler, handlers...)...)...)
+	return r.operation("POST", item.RelativePath, item.PathName, item.Params)
+}
+
+// Delete请求方式封装
+//
+// 参数如果为空, 该方法不会被记录在资源表中
+func (r *router) DELETEAgg(item *IRoutesAggItem, handlers ...HandlerFunc) (source *Resources) {
+	r.group.DELETE(item.RelativePath, wrapHandlers(r.core, genNewHandlers(item.Handler, handlers...)...)...)
+	return r.operation("DELETE", item.RelativePath, item.PathName, item.Params)
+}
+
+// Put请求方式封装
+//
+// 参数如果为空, 该方法不会被记录在资源表中
+func (r *router) PUTAgg(item *IRoutesAggItem, handlers ...HandlerFunc) (source *Resources) {
+	r.group.PUT(item.RelativePath, wrapHandlers(r.core, genNewHandlers(item.Handler, handlers...)...)...)
+	return r.operation("PUT", item.RelativePath, item.PathName, item.Params)
+}
+
 // 处理参数生成逻辑
 func (r *router) operation(method, relativePath, pathName string, params any) (source *Resources) {
 	if relativePath == "" {
 		relativePath = "/"
 	}
 	var (
-		paramStr, acceptType string
+		// viewsList  []*Views
+		acceptType string
 	)
 	source = r.genResources(relativePath, pathName, method)
 	// 默认资源均需要授权才能访问
@@ -207,11 +268,12 @@ func (r *router) operation(method, relativePath, pathName string, params any) (s
 	if params != nil {
 		rt := reflect.TypeOf(params)
 		requestParams[fmt.Sprintf("%s:%s/%s", method, r.group.BasePath(), relativePath)] = rt
-		paramStr, acceptType = r.genResourcesParams(method, relativePath, rt)
+		_, acceptType = r.genViews(method, relativePath, ViewTypeForm, ViewTypeForm, rt)
 
 	}
+	// r.core.Views = append(r.core.Views, viewsList...)
 	// 每个接口的参数存放在变量中便于后面查询使用
-	source.Params, source.AcceptType = paramStr, acceptType
+	source.AcceptType = acceptType
 
 	return
 }
@@ -261,204 +323,6 @@ func (r *router) genResources(relativePath, name, method string) *Resources {
 	}
 
 	return s
-}
-
-const (
-	jsonContent = "application/json"
-	formContent = "application/x-www-form-urlencoded"
-
-	// 标签相关
-	tagJson    = "json"
-	tagForm    = "form"
-	tagDesc    = "desc"
-	tagBinding = "binding"
-	tagDefault = "default"
-	tagGorm    = "gorm"
-	tagView    = "views"
-
-	// 参数相关
-	paramsKey           = "key"
-	paramsValue         = "value"
-	paramsValueType     = "value_type"
-	paramsValueInt      = "int"
-	paramsValueNum      = "number"
-	paramsValueBool     = "bool"
-	paramsValueFloat    = "float"
-	paramsValueDate     = "date"
-	paramsValueDatetiem = "datetime"
-)
-
-// 根据参数结构体生成API参数,
-//
-// 当前仅支持 form 和 json 两种格式
-//
-// 根据参数第一个字段的标签判断content-type类型
-//
-// 如果参数结构体定义多个参数格式, 将其他参数无法正确使用
-//
-// TODO: 支持文件/多文件参数定义
-func (r *router) genResourcesParams(method, pathName string, rt reflect.Type) (params string, contentType string) {
-	if rt == nil {
-		return
-	}
-	data := make([]any, 0)
-	viewsList := make([]*Views, 0, 100)
-	// viewsMap := make(map[string]*Views, 100)
-	for i := 0; i < rt.NumField(); i++ {
-		item := make(map[string]any, 4)
-		field := rt.Field(i)
-
-		// 获取前端参数名称
-		key := field.Tag.Get(tagForm)
-		contentTypeCustom := formContent
-		if key == "" {
-			contentTypeCustom = jsonContent
-			key = field.Tag.Get(tagJson)
-		}
-		// TODO: 增加其他类型检查
-
-		// 如果没有获取到key, 说明该参数无效, 跳过不在录入
-		if key == "" {
-			continue
-		}
-		// 通过第一个获取到参数的结构体的类型作为整个请求的content_type
-		if contentType == "" {
-			contentType = contentTypeCustom
-		}
-		view := &Views{
-			ResourceCode:  r.resource.Code,
-			ViewCode:      pathName,
-			ViewType:      "form",
-			ViewRole:      method,
-			ValueType:     "string",
-			Code:          key,
-			FormatterType: "input",
-		}
-
-		item[paramsKey] = key
-
-		// 前端参数的数据类型
-		typeStr := field.Type.String()
-		item[paramsValueType] = typeStr
-		// 后端参数类型转换为前端的参数类型
-		if strings.Contains(typeStr, paramsValueInt) {
-			item[paramsValueType] = paramsValueNum
-		} else if strings.Contains(typeStr, paramsValueFloat) {
-			item[paramsValueType] = paramsValueNum
-		}
-		if strings.Contains(typeStr, "[]") {
-			item[paramsValueType] = "[]:" + paramsValueNum
-			view.DefaultValue = "[]"
-		}
-
-		// 用于前端API文档中的默认值
-		item[paramsValue] = field.Tag.Get(tagDefault)
-		// 用于字段描述
-		item[tagDesc] = field.Tag.Get(tagDesc)
-		// 用于校验参数信息
-		item[tagBinding] = field.Tag.Get(tagBinding)
-		views := map[string]any{}
-
-		view.Name = field.Tag.Get(tagDesc)
-		view.ValueType = item[paramsValueType].(string)
-		view.Rules = field.Tag.Get(tagBinding)
-
-		for _, val := range strings.Split(field.Tag.Get(tagView), ";") {
-			kvs := strings.Split(val, ":")
-			k := kvs[0]
-			if len(k) == 0 {
-				continue
-			}
-			var v any
-			switch kvs[0] {
-			case "select":
-				v = key
-				view.FormatterType = "select"
-				view.Formatter = view.Code
-				if len(kvs) > 1 {
-					view.Formatter = kvs[1]
-				}
-			case "multiple":
-				view.Multiple = "Y"
-			case "disabled", "key":
-				view.Disabled = "Y"
-			case "hidden":
-				view.Hidden = 1
-			case "switch":
-				// 如果文字类型, 设置默认值Y,N
-				view.Formatter = view.Code
-				view.FormatterType = "switch"
-				view.CustomValue = []any{"Y", "N"}
-				view.DefaultValue = "N"
-				// 如果数字类型, 设置默认值1,-1
-				if view.ValueType == paramsValueNum {
-					view.CustomValue = []any{1, -1}
-					view.DefaultValue = "-1"
-				}
-
-				// 支持自定义, 格式: switch:1,2
-				if len(kvs) > 1 {
-					vaList := strings.Split(kvs[1], ",")
-					view.CustomValue = make(rdb.ModeListJson, 0, len(vaList))
-					for _, val := range vaList {
-						if view.ValueType == paramsValueNum {
-							num, _ := strconv.Atoi(val)
-							view.CustomValue = append(view.CustomValue, num)
-						} else {
-							view.CustomValue = append(view.CustomValue, val)
-						}
-					}
-				}
-			case "radio":
-				view.FormatterType = "radio"
-				view.Formatter = view.Code
-				if len(kvs) > 1 {
-					view.Formatter = kvs[1]
-				}
-			case "date":
-				view.FormatterType = "date"
-				view.Formatter = "YYYY-MM-DD"
-				if len(kvs) > 1 {
-					view.Formatter = kvs[1]
-				}
-			case "filter":
-				view.Filter = kvs[1]
-			case "span":
-				span, _ := strconv.Atoi(kvs[1])
-				view.Width = int16(span)
-			case "depend":
-				view.Depend = kvs[1]
-			case "default":
-				view.DefaultValue = kvs[1]
-			}
-
-			if len(kvs) > 1 {
-				v = kvs[1]
-			}
-			views[k] = v
-		}
-		item[tagView] = views
-		data = append(data, item)
-		paramsB, _ := json.Marshal(data)
-		params = string(paramsB)
-
-		if view.Name == "" {
-			sub := r.core.ViewsMap[fmt.Sprintf("%s:%s", view.ResourceCode, view.Code)]
-			if sub != nil {
-				view.Name = sub.Name
-			}
-		}
-		if view.Name == "" {
-			view.Name = strings.ToUpper(view.Code)
-		}
-		if view.FormatterType == "input" && view.ValueType == "number" {
-			view.FormatterType = "number"
-		}
-		viewsList = append(viewsList, view)
-	}
-
-	r.core.Views = append(r.core.Views, viewsList...)
-	return
 }
 
 // 用于设置某些路由不必写入资源库
@@ -609,148 +473,6 @@ func (r *router) WithViews(item any, fs ...FuncSetViews) RouterGroup {
 	}
 
 	return r
-}
-
-func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) (view *Views) {
-	view = &Views{
-		ResourceCode: r.resource.Code,
-		ViewCode:     r.resource.Name,
-		ViewType:     "table",
-		ValueType:    "string",
-		Hidden:       -1,
-		Width:        120,
-		Height:       0,
-		IsOrder:      1,
-		Filter:       "",
-		Fixed:        "N",
-		Account:      "system",
-	}
-
-	// 获取前端参数名称
-	view.Code = field.Tag.Get(tagJson)
-	// TODO: 增加其他类型检查
-
-	// 处理前端参数名称, 从gorm标签或者自定义的desc标签获取
-	view.Name = field.Tag.Get(tagDesc)
-	if view.Name == "" {
-		for _, tag := range strings.Split(field.Tag.Get(tagGorm), ";") {
-			if strings.Contains(tag, "comment:") {
-				view.Name = strings.Split(tag, ":")[1]
-				break
-			}
-		}
-	}
-	typeStr := field.Type.String()
-
-	// 后端参数类型转换为前端的参数类型
-	if strings.Contains(typeStr, paramsValueInt) {
-		view.ValueType = paramsValueNum
-	} else if strings.Contains(typeStr, paramsValueFloat) {
-		view.ValueType = paramsValueNum
-	} else if strings.Contains(typeStr, paramsValueBool) {
-		view.ValueType = paramsValueBool
-	} else if strings.Contains(typeStr, paramsValueBool) {
-		view.ValueType = paramsValueBool
-	}
-	if view.ValueType == paramsValueNum {
-		view.FormatterType = "number"
-	}
-	// 对view标签进行处理
-	genViewTag(view, field.Tag.Get(tagView))
-
-	if view.Code == "" {
-		return nil
-	}
-	if opt.ViewCode != "" {
-		view.ViewCode = opt.ViewCode
-	}
-
-	if opt.ColumnWidth > 0 {
-		view.Width = opt.ColumnWidth
-	}
-
-	if opt.ColumnHeight > 0 {
-		view.Height = opt.ColumnHeight
-	}
-
-	if opt.ColumnIsHidden > 0 {
-		view.Hidden = opt.ColumnIsHidden
-	}
-	if opt.ColumnIsOrder > 0 {
-		view.IsOrder = opt.ColumnIsOrder
-	}
-	if opt.ColumnFilter != "" {
-		view.Filter = opt.ColumnFilter
-	}
-	if opt.ColumnFixed != "" {
-		view.Fixed = opt.ColumnFixed
-	}
-	if opt.Account != "" {
-		view.Account = opt.Account
-	}
-	return
-}
-
-// view标签处理
-func genViewTag(view *Views, viewTag string) {
-	for _, tag := range strings.Split(viewTag, ";") {
-		if strings.Contains(tag, "code:") {
-			view.Code = strings.Split(tag, ":")[1]
-		}
-		if strings.Contains(tag, "name:") {
-			view.Name = strings.Split(tag, ":")[1]
-		}
-		if strings.Contains(tag, "width:") {
-			i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
-			if i > 0 {
-				view.Width = int16(i)
-			}
-		}
-		if strings.Contains(tag, "height:") {
-			i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
-			if i > 0 {
-				view.Height = int16(i)
-			}
-		}
-		if strings.Contains(tag, "hidden") {
-			view.Hidden = 1
-		}
-		if strings.Contains(tag, "isorder:") {
-			switch strings.Split(tag, ":")[1] {
-			case "true":
-				view.IsOrder = 1
-			case "false":
-				view.IsOrder = -1
-			default:
-				view.IsOrder = 1
-			}
-		}
-		if strings.Contains(tag, "filter:") {
-			view.Filter = strings.Split(tag, ":")[1]
-		}
-		if strings.Contains(tag, "fixed:") {
-			view.Fixed = strings.Split(tag, ":")[1]
-		}
-		if strings.Contains(tag, "formatter_type:") {
-			view.FormatterType = strings.Split(tag, ":")[1]
-
-		}
-		if strings.Contains(tag, "formatter") {
-			view.FormatterType = "text"
-			kvs := strings.Split(tag, ":")
-			k := kvs[0]
-			if len(k) == 0 {
-				continue
-			}
-			var v = view.Code
-
-			if len(kvs) > 1 {
-				v = kvs[1]
-			}
-			view.Formatter = v
-		}
-
-	}
 }
 
 func (r *router) SetViews(view *Views) RouterGroup {
