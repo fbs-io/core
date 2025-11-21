@@ -28,25 +28,34 @@ const (
 	tagView    = "views"
 
 	// views 标签
-	viewSelect    = "select"   // 下拉菜单
-	viewMultiple  = "multiple" // 多选
-	viewDisabled  = "disabled" // 不可选
-	viewKey       = "key"      // 主键
-	viewSwitcth   = "switch"   // 开关
-	viewFilter    = "filter"   // 过滤器, 用于查询条件
-	viewSpan      = "span"     // 宽度
-	viewsInput    = "input"    // 输入框, 默认值
-	viewDepend    = "depend"   // 依赖, 用于查询条件
-	viewRaido     = "radio"    // 选择框
-	viewDate      = "date"     // 日期选择框
-	viewHidden    = "hidden"   // 隐藏字段
-	viewsCheckbox = "checkbox" // 多选框
-	viewTextarea  = "textarea" // 多行文本框
-	viewsFile     = "file"     //文件
-	viewWidth     = "width"    // 宽度
-	viewHeight    = "height"   // 高度
-	viewCalc      = "calc"     // 计算公式
-	viewFormat    = "format"
+	viewSelect     = "select"      // 下拉菜单
+	viewMultiple   = "multiple"    // 多选
+	viewDisabled   = "disabled"    // 不可选
+	viewKey        = "key"         // 主键
+	viewSwitcth    = "switch"      // 开关
+	viewFilter     = "filter"      // 过滤器, 用于查询条件
+	viewSpan       = "span"        // 宽度
+	viewsInput     = "input"       // 输入框, 默认值
+	viewDepend     = "depend"      // 依赖, 用于查询条件
+	viewRaido      = "radio"       // 选择框
+	viewDate       = "date"        // 日期选择框
+	viewHidden     = "hidden"      // 隐藏字段
+	viewsCheckbox  = "checkbox"    // 多选框
+	viewTextarea   = "textarea"    // 多行文本框
+	viewsFile      = "file"        //文件
+	viewWidth      = "width"       // 宽度
+	viewHeight     = "height"      // 高度
+	viewCalc       = "calc"        // 计算公式
+	viewFormat     = "format"      // 格式化
+	viewFormatType = "format_type" //格式化类型
+	viewRel        = "rel"         // 关联其他值
+	viewMoney      = "money"       // 金额格式化
+	viewPer        = "%"           // 百分比格式化
+	viewCode       = "code"        // 定义字段code, 用于前端显示
+	viewSort       = "sort"        // 定义字段是否可以自定义排序, 用于前端显示
+	viewFixed      = "fixed"       // 定义字段是否固定, 用于前端显示
+	// viewName       = "name"        // 定义字段名称, 用于前端显示
+
 	// 参数相关
 	paramsValue      = "value"
 	paramsValueType  = "value_type"
@@ -99,14 +108,14 @@ func (r *router) genViews(method, pathName, viewType, ViewItemCode string, rt re
 			contentType = contentTypeCustom
 		}
 		view := &Views{
-			ResourceCode:  r.resource.Code,
-			ViewCode:      pathName,
-			ViewItemCode:  ViewItemCode,
-			ViewType:      viewType,
-			ViewRole:      method,
-			ValueType:     viewValueTypeStr,
-			Code:          key,
-			FormatterType: viewsInput,
+			ResourceCode: r.resource.Code,
+			ViewCode:     pathName,
+			ViewItemCode: ViewItemCode,
+			ViewType:     viewType,
+			ViewRole:     method,
+			ValueType:    viewValueTypeStr,
+			Code:         key,
+			FormatType:   viewsInput,
 		}
 
 		// 前端参数的数据类型
@@ -121,11 +130,11 @@ func (r *router) genViews(method, pathName, viewType, ViewItemCode string, rt re
 		}
 
 		// 用于前端API文档中的默认值
-		view.DefaultValue = field.Tag.Get(tagDefault)
+		view.Default = field.Tag.Get(tagDefault)
 
 		if strings.Contains(typeStr, "[]") {
 			view.ValueType = "[]:" + view.ValueType
-			view.DefaultValue = "[]"
+			view.Default = "[]"
 		}
 
 		view.Name = field.Tag.Get(tagDesc)
@@ -175,10 +184,10 @@ func (r *router) genViewsTag(viewTags []string, view *Views) {
 				view.Height = int16(i)
 			}
 		case viewSelect:
-			view.FormatterType = viewSelect
-			view.Formatter = view.Code
+			view.FormatType = viewSelect
+			view.Format = view.Code
 			if len(kvs) > 1 {
-				view.Formatter = kvs[1]
+				view.Format = kvs[1]
 			}
 		case viewMultiple:
 			view.Multiple = "Y"
@@ -188,19 +197,27 @@ func (r *router) genViewsTag(viewTags []string, view *Views) {
 			view.Key = "Y"
 			view.Disabled = "Y"
 		case viewFormat:
-			view.Formatter = kvs[1]
+			if len(kvs) > 1 {
+				view.Format = kvs[1]
+			} else {
+				view.Format = view.Code
+			}
 		case viewHidden:
 			view.Hidden = 1
+		case viewMoney:
+			view.Format = viewMoney
+		case viewPer:
+			view.Format = viewPer
 		case viewSwitcth:
 			// 如果文字类型, 设置默认值Y,N
-			view.Formatter = view.Code
-			view.FormatterType = viewSwitcth
+			view.Format = view.Code
+			view.FormatType = viewSwitcth
 			view.CustomValue = []any{"Y", "N"}
-			view.DefaultValue = "N"
+			view.Default = "N"
 			// 如果数字类型, 设置默认值1,-1
 			if view.ValueType == viewValueTypeNum {
 				view.CustomValue = []any{1, -1}
-				view.DefaultValue = "-1"
+				view.Default = "-1"
 			}
 
 			// 支持自定义, 格式: switch:1,2
@@ -217,16 +234,16 @@ func (r *router) genViewsTag(viewTags []string, view *Views) {
 				}
 			}
 		case viewRaido:
-			view.FormatterType = viewRaido
-			view.Formatter = view.Code
+			view.FormatType = viewRaido
+			view.Format = view.Code
 			if len(kvs) > 1 {
-				view.Formatter = kvs[1]
+				view.Format = kvs[1]
 			}
 		case viewDate:
-			view.FormatterType = viewDate
-			view.Formatter = "YYYY-MM-DD"
+			view.FormatType = viewDate
+			view.Format = "YYYY-MM-DD"
 			if len(kvs) > 1 {
-				view.Formatter = kvs[1]
+				view.Format = kvs[1]
 			}
 		case viewFilter:
 			view.Filter = kvs[1]
@@ -236,11 +253,21 @@ func (r *router) genViewsTag(viewTags []string, view *Views) {
 		case viewDepend:
 			view.Depend = kvs[1]
 		case viewTextarea:
-			view.FormatterType = viewTextarea
+			view.FormatType = viewTextarea
 		case viewCalc:
 			view.Calc = kvs[1]
+		case viewRel:
+			view.Related = kvs[1]
 		case tagDefault:
-			view.DefaultValue = kvs[1]
+			view.Default = kvs[1]
+		case view.Code:
+			if len(kvs) > 1 {
+				view.Code = kvs[1]
+			}
+		case viewSort:
+			view.IsOrder = 1
+		case viewFixed:
+			view.Fixed = "Y"
 		}
 	}
 
@@ -253,8 +280,8 @@ func (r *router) genViewsTag(viewTags []string, view *Views) {
 	if view.Name == "" {
 		view.Name = strings.ToUpper(view.Code)
 	}
-	if view.FormatterType == viewsInput && view.ValueType == viewValueTypeNum {
-		view.FormatterType = viewValueTypeNum
+	if view.FormatType == viewsInput && view.ValueType == viewValueTypeNum {
+		view.FormatType = viewValueTypeNum
 	}
 }
 
@@ -300,10 +327,13 @@ func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) 
 		view.ValueType = paramsValueBool
 	}
 	if view.ValueType == viewValueTypeNum {
-		view.FormatterType = "number"
+		view.FormatType = "number"
+	}
+	viewsTag := field.Tag.Get(tagView)
+	if viewsTag != "" {
+		r.genViewsTag(strings.Split(viewsTag, ";"), view)
 	}
 	// 对view标签进行处理
-	genViewTag(view, field.Tag.Get(tagView))
 
 	if view.Code == "" {
 		return nil
@@ -336,66 +366,4 @@ func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) 
 		view.Account = opt.Account
 	}
 	return
-}
-
-// view标签处理
-func genViewTag(view *Views, viewTag string) {
-	for _, tag := range strings.Split(viewTag, ";") {
-		if strings.Contains(tag, "code:") {
-			view.Code = strings.Split(tag, ":")[1]
-		}
-		if strings.Contains(tag, "name:") {
-			view.Name = strings.Split(tag, ":")[1]
-		}
-		if strings.Contains(tag, "width:") {
-			i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
-			if i > 0 {
-				view.Width = int16(i)
-			}
-		}
-		if strings.Contains(tag, "height:") {
-			i, _ := strconv.Atoi(strings.Split(tag, ":")[1])
-			if i > 0 {
-				view.Height = int16(i)
-			}
-		}
-		if strings.Contains(tag, "hidden") {
-			view.Hidden = 1
-		}
-		if strings.Contains(tag, "isorder:") {
-			switch strings.Split(tag, ":")[1] {
-			case "true":
-				view.IsOrder = 1
-			case "false":
-				view.IsOrder = -1
-			default:
-				view.IsOrder = 1
-			}
-		}
-		if strings.Contains(tag, "filter:") {
-			view.Filter = strings.Split(tag, ":")[1]
-		}
-		if strings.Contains(tag, "fixed:") {
-			view.Fixed = strings.Split(tag, ":")[1]
-		}
-		if strings.Contains(tag, "format_type:") {
-			view.FormatterType = strings.Split(tag, ":")[1]
-
-		}
-		if strings.Contains(tag, "format") {
-			view.FormatterType = "text"
-			kvs := strings.Split(tag, ":")
-			k := kvs[0]
-			if len(k) == 0 {
-				continue
-			}
-			var v = view.Code
-
-			if len(kvs) > 1 {
-				v = kvs[1]
-			}
-			view.Formatter = v
-		}
-
-	}
 }

@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2025-11-09 21:19:35
+ * @LastEditTime: 2025-11-11 06:32:03
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -239,34 +239,34 @@ func (o *OperateLog) TableName() string {
 
 // 用于前端展示的视图
 type Views struct {
-	ResourceCode  string           `json:"resource_code" gorm:"column:resource_code;comment:资源code;index"`
-	ViewCode      string           `json:"view_code" gorm:"column:view_code;comment:视图code;index"`
-	ViewType      string           `json:"view_type" gorm:"column:view_type;comment:视图类型,如表格, 表单"`
-	ViewItemCode  string           `json:"view_item_code" gorm:"column:view_item_code;comment:视图项code;index"`
-	ViewRole      string           `json:"view_role" gorm:"column:view_role;comment:视图功能,如新增, 编辑, 删除"`
-	Code          string           `json:"code" gorm:"column:code;comment:字段code;index"`
-	Name          string           `json:"name" gorm:"column:name;comment:字段名称"`
-	Key           string           `json:"key" gorm:"column:key;comment:主键"`
-	Calc          string           `json:"calc" gorm:"column:calc;comment:计算字段"`
-	ValueType     string           `json:"value_type" gorm:"column:value_type;comment:字段值类型,如string, int, float"`
-	Width         int16            `json:"width" gorm:"column:width;comment:宽度"`
-	Height        int16            `json:"height" gorm:"column:height;comment:高度"`
-	Hidden        int8             `json:"hidden" gorm:"column:hidden;comment:是否隐藏"`
-	IsOrder       int8             `json:"order" gorm:"column:isorder;comment:是否排序"`
-	Filter        string           `json:"filter" gorm:"column:filter;comment:过滤字段"`
-	Fixed         string           `json:"fixed" gorm:"column:fixed;comment:固定列"`
-	Position      string           `json:"position" gorm:"column:position;comment:列位置,如头部:header, 底部:bottom"`
-	Align         string           `json:"align" gorm:"column:align;comment:对齐方式,如左:left, 右:right, 居中:center"`
-	FormatterType string           `json:"formatter_type" gorm:"column:formatter_type;comment:格式化类型,如时间:time, 金额:money,下拉选项等"`
-	Formatter     string           `json:"formatter" gorm:"column:formatter;comment:格式化字段名"`
-	Disabled      string           `json:"disabled" gorm:"column:disabled;comment:表单是否禁用编辑"`
-	Multiple      string           `json:"multiple" gorm:"column:props;comment:是否多选"`
-	Rules         string           `json:"rules" gorm:"column:rules;comment:表单组件校验规则"`
-	Placeholder   string           `json:"placeholder" gorm:"column:placeholder;comment:表单组件提示信息"`
-	DefaultValue  string           `json:"defaultValue" gorm:"column:default_value;comment:表单组件默认值"`
-	CustomValue   rdb.ModeListJson `json:"customValue" gorm:"type:string;column:custom_value;comment:表单组件自定义值"`
-	Depend        string           `json:"depend" gorm:"column:depend;comment:依赖字段"`
-	Account       string           `json:"account" gorm:"column:account;comment:账号"`
+	ResourceCode string           `json:"resource_code" gorm:"column:resource_code;comment:资源code;index"`
+	ViewCode     string           `json:"view_code" gorm:"column:view_code;comment:视图code;index"`
+	ViewType     string           `json:"view_type" gorm:"column:view_type;comment:视图类型,如表格, 表单"`
+	ViewItemCode string           `json:"view_item_code" gorm:"column:view_item_code;comment:视图项code;index"`
+	ViewRole     string           `json:"view_role" gorm:"column:view_role;comment:视图功能,如新增, 编辑, 删除"`
+	Code         string           `json:"code" gorm:"column:code;comment:字段code;index"`
+	Name         string           `json:"name" gorm:"column:name;comment:字段名称"`
+	Key          string           `json:"key" gorm:"column:key;comment:主键"`
+	Calc         string           `json:"calc" gorm:"column:calc;comment:计算字段,用于数字计算"`
+	ValueType    string           `json:"value_type" gorm:"column:value_type;comment:字段值类型,如string, int, float"`
+	Width        int16            `json:"width" gorm:"column:width;comment:宽度"`
+	Height       int16            `json:"height" gorm:"column:height;comment:高度"`
+	Hidden       int8             `json:"hidden" gorm:"column:hidden;comment:是否隐藏"`
+	IsOrder      int8             `json:"order" gorm:"column:isorder;comment:是否排序"`
+	Filter       string           `json:"filter" gorm:"column:filter;comment:过滤字段"`
+	Fixed        string           `json:"fixed" gorm:"column:fixed;comment:固定列"`
+	Align        string           `json:"align" gorm:"column:align;comment:对齐方式,如左:left, 右:right, 居中:center"`
+	FormatType   string           `json:"format_type" gorm:"column:format_type;comment:格式化类型,如时间:time, 金额:money,下拉选项等"`
+	Format       string           `json:"format" gorm:"column:format;comment:格式化字段名"`
+	Disabled     string           `json:"disabled" gorm:"column:disabled;comment:表单是否禁用编辑"`
+	Multiple     string           `json:"multiple" gorm:"column:props;comment:是否多选"`
+	Rules        string           `json:"rules" gorm:"column:rules;comment:表单组件校验规则"`
+	Placeholder  string           `json:"placeholder" gorm:"column:placeholder;comment:表单组件提示信息"`
+	Default      string           `json:"default" gorm:"column:default;comment:表单组件默认值"`
+	Related      string           `json:"related" gorm:"column:related;comment:组件关联其他字段显示的默认值"`
+	CustomValue  rdb.ModeListJson `json:"customValue" gorm:"type:string;column:custom_value;comment:表单组件自定义值"`
+	Depend       string           `json:"depend" gorm:"column:depend;comment:依赖字段"`
+	Account      string           `json:"account" gorm:"column:account;comment:账号"`
 	rdb.Model
 	rdb.ShardingModel
 }

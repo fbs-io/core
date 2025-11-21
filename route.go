@@ -221,6 +221,7 @@ func genNewHandlers(handler HandlerFunc, handlers ...HandlerFunc) (newHandlers [
 	return newHandlers
 }
 
+// Get请求方式封装
 func (r *router) GETAgg(item *IRoutesAggItem, handlers ...HandlerFunc) (source *Resources) {
 	r.group.GET(item.RelativePath, wrapHandlers(r.core, genNewHandlers(item.Handler, handlers...)...)...)
 	return r.operation("GET", item.RelativePath, item.PathName, item.Params)
