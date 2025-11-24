@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2025-11-11 06:32:03
+ * @LastEditTime: 2025-11-24 22:06:08
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -203,9 +203,16 @@ func SetPageTableKey(key string) FuncSetPageViews {
 }
 
 // 用于控制显示的列
-func SetColumnsShow(columns string) FuncSetPageViews {
+func SetColumnsShow(columns []string) FuncSetPageViews {
 	return func(options rdb.ModeMapJson) {
 		options["ColumnsShow"] = columns
+	}
+}
+
+// 用于控制隐藏的列
+func SetColumnHidden(columns []string) FuncSetPageViews {
+	return func(options rdb.ModeMapJson) {
+		options["ColumnsHidden"] = columns
 	}
 }
 
