@@ -14,7 +14,9 @@ const (
 	formContent = "application/x-www-form-urlencoded"
 
 	ViewTypeForm     = "form"
+	ViewTypeColumn   = "column"
 	ViewTypeTable    = "table"
+	ViewRoleShow     = "show"
 	viewValueTypeStr = "string"
 	viewValueTypeNum = "number"
 
@@ -285,13 +287,53 @@ func (r *router) genViewsTag(viewTags []string, view *Views) {
 	}
 }
 
-func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) (view *Views) {
+func (r *router) genViewColumns(rt reflect.Type, viewType, viewItemCode, viewRole string, opt *SetViewOptions) (view *Views) {
+
+	for i := 0; i < rt.NumField(); i++ {
+		field := rt.Field(i)
+		// 如果参数是切片, 递归处理切片元素的结构体字段
+
+		view = r.genViewCol(field, viewType, viewItemCode, viewRole, opt)
+		if view == nil {
+			continue
+		}
+		key := fmt.Sprintf("%s:%s:%s", view.ResourceCode, viewItemCode, view.Code)
+
+		if r.core.ViewsMap[key] == nil {
+			r.core.Views = append(r.core.Views, view)
+			r.core.ViewsMap[key] = view
+		}
+
+		// 如果参数是切片, 递归处理切片元素的结构体字段
+		if field.Type.Kind() == reflect.Slice {
+			elemType := field.Type.Elem()
+
+			// 处理切片元素为指针的情况
+			if elemType.Kind() == reflect.Ptr {
+				elemType = elemType.Elem()
+			}
+
+			// 解析切片元素的结构体字段
+			if elemType.Kind() == reflect.Struct {
+				view.ViewType = ViewTypeTable
+				r.genViewColumns(elemType, ViewTypeTable, view.Code, viewRole, opt)
+
+			}
+		}
+
+	}
+
+	return
+}
+
+func (r *router) genViewCol(field reflect.StructField, viewType, viewItemCode, viewRole string, opt *SetViewOptions) (view *Views) {
 	view = &Views{
 		ResourceCode: r.resource.Code,
 		ViewCode:     r.resource.Name,
-		ViewType:     "table",
+		ViewType:     viewType,
+		ViewItemCode: viewItemCode,
+		ViewRole:     viewRole,
 		ValueType:    "string",
-		Hidden:       -1,
 		Width:        120,
 		Height:       0,
 		IsOrder:      1,
@@ -299,7 +341,6 @@ func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) 
 		Fixed:        "N",
 		Account:      "system",
 	}
-
 	// 获取前端参数名称
 	view.Code = field.Tag.Get(tagJson)
 	// TODO: 增加其他类型检查
@@ -315,7 +356,6 @@ func (r *router) genViewColumns(field reflect.StructField, opt *SetViewOptions) 
 		}
 	}
 	typeStr := field.Type.String()
-
 	// 后端参数类型转换为前端的参数类型
 	if strings.Contains(typeStr, valueInt) {
 		view.ValueType = viewValueTypeNum

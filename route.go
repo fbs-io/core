@@ -456,22 +456,7 @@ func (r *router) WithViews(item any, fs ...FuncSetViews) RouterGroup {
 	for _, f := range fs {
 		f(options)
 	}
-
-	for i := 0; i < rt.NumField(); i++ {
-		field := rt.Field(i)
-		view := r.genViewColumns(field, options)
-		if view == nil {
-			continue
-		}
-
-		key := view.ResourceCode + ":" + view.Code
-
-		if r.core.ViewsMap[key] == nil {
-			r.core.Views = append(r.core.Views, view)
-			r.core.ViewsMap[key] = view
-		}
-
-	}
+	r.genViewColumns(rt, ViewTypeColumn, ViewTypeTable, ViewRoleShow, options)
 
 	return r
 }
