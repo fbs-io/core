@@ -297,12 +297,12 @@ func (r *router) genViewColumns(rt reflect.Type, viewType, viewItemCode, viewRol
 		if view == nil {
 			continue
 		}
-		key := fmt.Sprintf("%s:%s:%s", view.ResourceCode, viewItemCode, view.Code)
+		key := fmt.Sprintf("%s:%s", view.ResourceCode, view.Code)
 
 		if r.core.ViewsMap[key] == nil {
-			r.core.Views = append(r.core.Views, view)
 			r.core.ViewsMap[key] = view
 		}
+		r.core.Views = append(r.core.Views, view)
 
 		// 如果参数是切片, 递归处理切片元素的结构体字段
 		if field.Type.Kind() == reflect.Slice {
