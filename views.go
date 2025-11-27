@@ -77,14 +77,20 @@ const (
 //
 // TODO: 支持文件/多文件参数定义
 
-func (r *router) genViews(method, pathName, viewType, ViewItemCode string, rt reflect.Type) (viewsList []*Views, contentType string) {
+func (r *router) genViews(method, pathName, viewType, ViewItemCode string, rt reflect.Type, params any) (viewsList []*Views, contentType string) {
 	if rt == nil {
 		return
 	}
 	// 指针类型转换
 	if rt.Kind() == reflect.Ptr {
-		fmt.Println("指针类型")
 		rt = rt.Elem()
+	}
+	var rv reflect.Value
+	if params != nil {
+		rv = reflect.ValueOf(params)
+		if rv.Kind() == reflect.Ptr {
+			rv = rv.Elem()
+		}
 	}
 	viewsList = make([]*Views, 0, 100)
 	// viewsMap := make(map[string]*Views, 100)
@@ -145,6 +151,12 @@ func (r *router) genViews(method, pathName, viewType, ViewItemCode string, rt re
 		r.genViewsTag(strings.Split(field.Tag.Get(tagView), ";"), view)
 
 		r.core.Views = append(r.core.Views, view)
+
+		// 如果参数设置默认值,优先从参数获中取默认值
+		// 结构体嵌套切片, 不需要设置默认值
+		if params != nil && !rv.IsZero() && !rv.Field(i).IsZero() {
+			view.Default = fmt.Sprintf("%v", rv.Field(i).Interface())
+		}
 		// var tableViews []*Views
 		// 如果参数是切片, 递归处理切片元素的结构体字段
 		if field.Type.Kind() == reflect.Slice {
@@ -154,12 +166,11 @@ func (r *router) genViews(method, pathName, viewType, ViewItemCode string, rt re
 			if elemType.Kind() == reflect.Ptr {
 				elemType = elemType.Elem()
 			}
-
 			// 解析切片元素的结构体字段
 			if elemType.Kind() == reflect.Struct {
 				view.ViewType = ViewTypeTable
 
-				r.genViews(method, pathName, ViewTypeTable, key, elemType)
+				r.genViews(method, pathName, ViewTypeTable, key, elemType, nil)
 			}
 		}
 	}

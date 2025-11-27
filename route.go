@@ -269,7 +269,7 @@ func (r *router) operation(method, relativePath, pathName string, params any) (s
 	if params != nil {
 		rt := reflect.TypeOf(params)
 		requestParams[fmt.Sprintf("%s:%s/%s", method, r.group.BasePath(), relativePath)] = rt
-		_, acceptType = r.genViews(method, relativePath, ViewTypeForm, ViewTypeForm, rt)
+		_, acceptType = r.genViews(method, relativePath, ViewTypeForm, ViewTypeForm, rt, params)
 
 	}
 	// r.core.Views = append(r.core.Views, viewsList...)
