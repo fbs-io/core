@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-05-16 20:17:56
  * @LastEditors: reel
- * @LastEditTime: 2025-09-21 15:03:10
+ * @LastEditTime: 2025-12-06 09:30:37
  * @Description: 系统配置相关操作
  */
 package core
@@ -81,18 +81,36 @@ func (c *core) install() (err error) {
 	c.rdb.Register(&rdb.Sharding{})
 	v := &Views{}
 	c.rdb.Register(v, func(db *gorm.DB) error {
-		viewByte, _ := json.Marshal(c.Views)
-		views := make([]*Views, 0, 1000)
-		json.Unmarshal(viewByte, &views)
-		return db.Table(v.TableName()).CreateInBatches(views, len(views)).Error
+		end := 0
+		for i := 0; i < len(c.Views); i += 500 {
+			end = i + 500
+			if len(c.Views) < end {
+				end = len(c.Views)
+			}
+			views := c.Views[i:end]
+			err = db.Table(v.TableName()).CreateInBatches(views, len(views)).Error
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 
 	s := &Resources{}
 	c.rdb.Register(s, func(db *gorm.DB) error {
-		resourceByte, _ := json.Marshal(resources)
-		res := make([]*Resources, 0, 1000)
-		json.Unmarshal(resourceByte, &res)
-		return db.Table(s.TableName()).CreateInBatches(res, len(resources)).Error
+		end := 0
+		for i := 0; i < len(resources); i += 500 {
+			end = i + 500
+			if len(resources) < end {
+				end = len(resources)
+			}
+			res := resources[i:end]
+			err = db.Table(s.TableName()).CreateInBatches(res, len(res)).Error
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 
 	service.Append(c.rdb)

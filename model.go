@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2025-11-24 22:06:08
+ * @LastEditTime: 2025-12-06 09:36:21
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -257,6 +257,7 @@ type Views struct {
 	Calc         string           `json:"calc" gorm:"column:calc;comment:计算字段,用于数字计算"`
 	ValueType    string           `json:"value_type" gorm:"column:value_type;comment:字段值类型,如string, int, float"`
 	Width        int16            `json:"width" gorm:"column:width;comment:宽度"`
+	Span         int16            `json:"span" gorm:"column:span;comment:表单宽度"`
 	Height       int16            `json:"height" gorm:"column:height;comment:高度"`
 	Hidden       int8             `json:"hidden" gorm:"column:hidden;comment:是否隐藏"`
 	IsOrder      int8             `json:"order" gorm:"column:isorder;comment:是否排序"`

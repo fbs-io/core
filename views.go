@@ -147,6 +147,25 @@ func (r *router) genViews(method, pathName, viewType, ViewItemCode string, rt re
 
 		view.Name = field.Tag.Get(tagDesc)
 		view.Rules = field.Tag.Get(tagBinding)
+		rules := strings.Split(field.Tag.Get(tagBinding), ",")
+
+		// 处理rules中的字段名称
+		for _, rule := range rules {
+			p := strings.Split(rule, "=")
+			if len(p) == 2 {
+				v := p[1]
+				field2, ok := rt.FieldByName(v)
+				if ok {
+					key2 := field2.Tag.Get(tagForm)
+					if key2 == "" {
+						key2 = field2.Tag.Get(tagJson)
+					}
+					if key2 != "" {
+						view.Rules = strings.ReplaceAll(view.Rules, v, key2)
+					}
+				}
+			}
+		}
 
 		r.genViewsTag(strings.Split(field.Tag.Get(tagView), ";"), view)
 
@@ -262,7 +281,7 @@ func (r *router) genViewsTag(viewTags []string, view *Views) {
 			view.Filter = kvs[1]
 		case viewSpan:
 			span, _ := strconv.Atoi(kvs[1])
-			view.Width = int16(span)
+			view.Span = int16(span)
 		case viewDepend:
 			view.Depend = kvs[1]
 		case viewTextarea:
