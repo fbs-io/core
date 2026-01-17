@@ -50,13 +50,13 @@ const (
 	viewCalc       = "calc"        // 计算公式
 	viewFormat     = "format"      // 格式化
 	viewFormatType = "format_type" //格式化类型
-	viewRel        = "rel"         // 关联其他值
+	viewRelated    = "related"     // 关联其他值
 	viewMoney      = "money"       // 金额格式化
 	viewPer        = "%"           // 百分比格式化
 	viewCode       = "code"        // 定义字段code, 用于前端显示
 	viewSort       = "sort"        // 定义字段是否可以自定义排序, 用于前端显示
 	viewFixed      = "fixed"       // 定义字段是否固定, 用于前端显示
-	// viewName       = "name"        // 定义字段名称, 用于前端显示
+	viewRemote     = "remote"      // 是否远程显示
 
 	// 参数相关
 	paramsValue      = "value"
@@ -288,7 +288,7 @@ func (r *router) genViewsTag(viewTags []string, view *Views) {
 			view.FormatType = viewTextarea
 		case viewCalc:
 			view.Calc = kvs[1]
-		case viewRel:
+		case viewRelated:
 			view.Related = kvs[1]
 		case tagDefault:
 			view.Default = kvs[1]
@@ -300,6 +300,11 @@ func (r *router) genViewsTag(viewTags []string, view *Views) {
 			view.IsOrder = 1
 		case viewFixed:
 			view.Fixed = "Y"
+		case viewRemote:
+			view.Remote = "Y"
+			if len(kvs) > 1 {
+				view.Remote = kvs[1]
+			}
 		}
 	}
 

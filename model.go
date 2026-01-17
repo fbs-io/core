@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2025-12-06 09:36:21
+ * @LastEditTime: 2026-01-11 19:00:26
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -274,6 +274,7 @@ type Views struct {
 	Related      string           `json:"related" gorm:"column:related;comment:组件关联其他字段显示的默认值"`
 	CustomValue  rdb.ModeListJson `json:"customValue" gorm:"type:string;column:custom_value;comment:表单组件自定义值"`
 	Depend       string           `json:"depend" gorm:"column:depend;comment:依赖字段"`
+	Remote       string           `json:"remote" gorm:"column:remote;comment:远程字段,用于远程获取数据"`
 	Account      string           `json:"account" gorm:"column:account;comment:账号"`
 	rdb.Model
 	rdb.ShardingModel
