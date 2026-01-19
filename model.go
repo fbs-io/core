@@ -2,7 +2,7 @@
  * @Author: reel
  * @Date: 2023-06-16 05:57:22
  * @LastEditors: reel
- * @LastEditTime: 2026-01-11 19:00:26
+ * @LastEditTime: 2026-01-19 20:21:43
  * @Description: 系统资源model, 用于管理API及菜单
  */
 package core
@@ -71,7 +71,7 @@ type ResourcesBase struct {
 	Path      string          `json:"path" gorm:"column:resource_path;comment:前端用路径;index"`                    // 前端用组件方法
 	Component string          `json:"component" gorm:"column:resource_component;comment:组件名称"`                 // 前端组件名称
 	Meta      rdb.ModeMapJson `json:"meta" gorm:"column:resource_meta;type:varchar(10000);comment:前端用路由参数元信息"` // 前端组件原信息
-	PageView  rdb.ModeMapJson `json:"page_view" gorm:"column:resource_views;type:varchar(10000);comment:前端视图配置信息"`
+	PageView  rdb.ModeMapJson `json:"page_view" gorm:"column:page_view;type:varchar(10000);comment:前端视图配置信息"`
 }
 
 // 数据库字段
@@ -189,6 +189,8 @@ func (e *Resources) ParentCode() string {
 type FuncSetPageViews func(options rdb.ModeMapJson)
 
 // 设置视图元素宽度
+// 如果是table, 则设置table的宽度, 一般是像素
+// 如果是form, 则设置form的宽度:3,6,12
 func SetPageViewWidth(width int16) FuncSetPageViews {
 	return func(options rdb.ModeMapJson) {
 		options["ViewWidth"] = width
@@ -213,6 +215,15 @@ func SetColumnsShow(columns []string) FuncSetPageViews {
 func SetColumnHidden(columns []string) FuncSetPageViews {
 	return func(options rdb.ModeMapJson) {
 		options["ColumnsHidden"] = columns
+	}
+}
+
+// 用于管理页面弹窗宽度
+//
+// width: 宽度, 默认90%
+func SetPageWidth(width int16) FuncSetPageViews {
+	return func(options rdb.ModeMapJson) {
+		options["PageWidth"] = width
 	}
 }
 
