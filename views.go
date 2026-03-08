@@ -31,6 +31,7 @@ const (
 
 	// views 标签
 	viewSelect     = "select"      // 下拉菜单
+	viewTreeSelect = "tselect"     // 树形下拉菜单
 	viewMultiple   = "multiple"    // 多选
 	viewDisabled   = "disabled"    // 不可选
 	viewKey        = "key"         // 主键
@@ -215,8 +216,8 @@ func (r *router) genViewsTag(viewTags []string, view *Views) {
 			if i > 0 {
 				view.Height = int16(i)
 			}
-		case viewSelect:
-			view.FormatType = viewSelect
+		case viewSelect, viewTreeSelect:
+			view.FormatType = kvs[0]
 			view.Format = view.Code
 			if len(kvs) > 1 {
 				view.Format = kvs[1]
